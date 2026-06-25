@@ -1,0 +1,83 @@
+server:
+  port: 2333
+  address: 127.0.0.1
+  http2:
+    enabled: false
+
+lavalink:
+  plugins:
+    - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.1"
+      snapshot: false
+    # Uncomment LavaSrc only when you want Spotify/Apple/Deezer link resolving.
+    # Spotify still needs a free Spotify developer client ID and secret.
+    # - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.1"
+    #   snapshot: false
+  server:
+    password: "youshallnotpass"
+    sources:
+      # Lavalink's built-in YouTube source is deprecated. Use youtube-plugin above.
+      youtube: false
+      bandcamp: true
+      soundcloud: true
+      twitch: true
+      vimeo: true
+      nico: true
+      http: true
+      local: false
+    filters:
+      volume: true
+      equalizer: true
+      karaoke: true
+      timescale: true
+      tremolo: true
+      vibrato: true
+      distortion: true
+      rotation: true
+      channelMix: true
+      lowPass: true
+    bufferDurationMs: 400
+    frameBufferDurationMs: 5000
+    opusEncodingQuality: 10
+    resamplingQuality: LOW
+    trackStuckThresholdMs: 10000
+    useSeekGhosting: true
+    playerUpdateInterval: 5
+    youtubeSearchEnabled: true
+    soundcloudSearchEnabled: true
+
+plugins:
+  youtube:
+    enabled: true
+    allowSearch: true
+    allowDirectVideoIds: true
+    allowDirectPlaylistIds: true
+    clients:
+      - MUSIC
+      - ANDROID_VR
+      - WEB
+      - WEBEMBEDDED
+  # lavasrc:
+  #   providers:
+  #     - "ytsearch:%ISRC%"
+  #     - "ytsearch:%QUERY%"
+  #   sources:
+  #     spotify: true
+  #     applemusic: true
+  #     deezer: true
+  #     yandexmusic: false
+  #   spotify:
+  #     clientId: "paste_spotify_client_id"
+  #     clientSecret: "paste_spotify_client_secret"
+  #     countryCode: "US"
+
+metrics:
+  prometheus:
+    enabled: false
+    endpoint: /metrics
+
+logging:
+  file:
+    path: ./logs/
+  level:
+    root: INFO
+    lavalink: INFO
