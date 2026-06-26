@@ -97,6 +97,15 @@ OPENAI_MODEL=gpt-5.4-mini
 ENABLE_MESSAGE_CONTENT_INTENT=true
 ```
 
+For fast Groq replies:
+
+```env
+AI_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama-3.1-8b-instant
+ENABLE_MESSAGE_CONTENT_INTENT=true
+```
+
 For OpenRouter:
 
 ```env
@@ -108,6 +117,11 @@ ENABLE_MESSAGE_CONTENT_INTENT=true
 ```
 
 Use a chat model for Discord replies. Rerank models such as `nvidia/llama-nemotron-rerank-vl-1b-v2:free` are for sorting documents by relevance and cannot generate normal chat replies.
+
+Groq model notes:
+
+- `llama-3.1-8b-instant` is the recommended fast model for Discord auto-replies.
+- `llama-3.3-70b-versatile` gives stronger replies, but is slower and has tighter limits.
 
 Useful commands:
 
@@ -124,7 +138,7 @@ AI_MAX_TOKENS=140
 AI_TIMEOUT_MS=15000
 ```
 
-Lower `AI_MAX_TOKENS` means shorter, usually faster replies. Free OpenRouter models can still be slow when the provider is busy.
+Lower `AI_MAX_TOKENS` means shorter, usually faster replies. Groq is usually much faster than free OpenRouter routes for short Discord replies.
 
 ## Music
 

@@ -109,9 +109,11 @@ export const aiCommand: Command = {
       });
 
       const warning = !hasAiKey()
-        ? env.aiProvider === "openrouter"
-          ? "\n\nMissing `OPENROUTER_API_KEY` in `.env`. Add it and restart the bot before this can answer."
-          : "\n\nMissing `OPENAI_API_KEY` in `.env`. Add it and restart the bot before this can answer."
+        ? env.aiProvider === "groq"
+          ? "\n\nMissing `GROQ_API_KEY` in `.env`. Add it and restart the bot before this can answer."
+          : env.aiProvider === "openrouter"
+            ? "\n\nMissing `OPENROUTER_API_KEY` in `.env`. Add it and restart the bot before this can answer."
+            : "\n\nMissing `OPENAI_API_KEY` in `.env`. Add it and restart the bot before this can answer."
         : "";
       const intentWarning = !env.enableMessageContentIntent
         ? "\n\nAuto-replies need `ENABLE_MESSAGE_CONTENT_INTENT=true` in `.env` and Message Content Intent enabled in the Discord Developer Portal."
@@ -158,7 +160,7 @@ export const aiCommand: Command = {
           { name: "Auto Reply Channel", value: config.aiResponderChannelId ? `<#${config.aiResponderChannelId}>` : "`Not set`", inline: true },
           { name: "Persona", value: `\`${config.aiResponderPersona ?? "default"}\``, inline: true },
           { name: "Provider", value: `\`${env.aiProvider}\``, inline: true },
-          { name: "Model", value: `\`${env.aiProvider === "openrouter" ? env.openRouterModel : env.openAIModel}\``, inline: true },
+          { name: "Model", value: `\`${env.aiProvider === "groq" ? env.groqModel : env.aiProvider === "openrouter" ? env.openRouterModel : env.openAIModel}\``, inline: true },
           { name: "Reply Size", value: `\`${env.aiMaxTokens} tokens\``, inline: true },
           { name: "Timeout", value: `\`${env.aiTimeoutMs}ms\``, inline: true },
           { name: "Message Content Intent", value: env.enableMessageContentIntent ? "`Enabled in .env`" : "`Disabled in .env`", inline: true },

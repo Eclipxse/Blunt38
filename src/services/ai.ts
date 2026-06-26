@@ -3,8 +3,18 @@ import { env } from "../env.js";
 
 let openAIClient: OpenAI | null = null;
 let openRouterClient: OpenAI | null = null;
+let groqClient: OpenAI | null = null;
 
 function getClient() {
+  if (env.aiProvider === "groq") {
+    if (!env.groqKey || env.groqKey === "put_your_groq_api_key_here") return null;
+    groqClient ??= new OpenAI({
+      apiKey: env.groqKey,
+      baseURL: "https://api.groq.com/openai/v1"
+    });
+    return groqClient;
+  }
+
   if (env.aiProvider === "openrouter") {
     if (!env.openRouterKey || env.openRouterKey === "put_your_openrouter_api_key_here") return null;
     openRouterClient ??= new OpenAI({
@@ -51,12 +61,22 @@ const personaPrompts: Record<NonNullable<AiReplyInput["persona"]>, string> = {
 export async function generateAiReply(input: AiReplyInput) {
   const openai = getClient();
   if (!openai) {
-    return env.aiProvider === "openrouter"
-      ? "AI is not configured. Add `OPENROUTER_API_KEY` to `.env`, then restart the bot."
-      : "AI is not configured. Add `OPENAI_API_KEY` to `.env`, then restart the bot.";
+    if (env.aiProvider === "groq") {
+      return "AI is not configured. Add `GROQ_API_KEY` to `.env`, then restart the bot.";
+    }
+
+    if (env.aiProvider === "openrouter") {
+      return "AI is not configured. Add `OPENROUTER_API_KEY` to `.env`, then restart the bot.";
+    }
+
+    return "AI is not configured. Add `OPENAI_API_KEY` to `.env`, then restart the bot.";
   }
 
-  const model = env.aiProvider === "openrouter" ? env.openRouterModel : env.openAIModel;
+  const model = env.aiProvider === "groq"
+    ? env.groqModel
+    : env.aiProvider === "openrouter"
+      ? env.openRouterModel
+      : env.openAIModel;
   if (env.aiProvider === "openrouter" && model.toLowerCase().includes("rerank")) {
     return [
       "That OpenRouter model is a rerank model, not a chat model.",
@@ -74,7 +94,7 @@ export async function generateAiReply(input: AiReplyInput) {
     input.customPrompt ? `Server-specific style: ${input.customPrompt}` : ""
   ].filter(Boolean).join("\n");
 
-  if (env.aiProvider === "openrouter") {
+  if (env.aiProvider === "groq" || env.aiProvider === "openrouter") {
     const response = await withTimeout(
       openai.chat.completions.create({
         model,

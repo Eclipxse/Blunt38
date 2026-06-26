@@ -75,6 +75,10 @@ async function handleAiResponder(message: Message<true>) {
     persona: config.aiResponderPersona
   }).catch((error) => {
     console.error("AI auto-reply failed:", error);
+    if (env.aiProvider === "groq") {
+      return "AI auto-reply failed. Check Groq key, model, and rate limits.";
+    }
+
     return env.aiProvider === "openrouter"
       ? "AI auto-reply failed. Check OpenRouter key, model, and usage limits."
       : "AI auto-reply failed. Check OpenAI key, model, and billing.";

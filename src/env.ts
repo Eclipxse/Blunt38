@@ -4,11 +4,15 @@ const token = process.env.DISCORD_TOKEN?.trim();
 const aiProviderRaw = process.env.AI_PROVIDER?.trim().toLowerCase();
 const openAIKey = process.env.OPENAI_API_KEY?.trim();
 const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+const groqKey = process.env.GROQ_API_KEY?.trim();
 const hasOpenAIKey = Boolean(openAIKey && openAIKey !== "put_your_openai_api_key_here");
 const hasOpenRouterKey = Boolean(openRouterKey && openRouterKey !== "put_your_openrouter_api_key_here");
-const aiProvider = aiProviderRaw === "openrouter" || (!aiProviderRaw && hasOpenRouterKey && !hasOpenAIKey)
-  ? "openrouter"
-  : "openai";
+const hasGroqKey = Boolean(groqKey && groqKey !== "put_your_groq_api_key_here");
+const aiProvider = aiProviderRaw === "groq" || (!aiProviderRaw && hasGroqKey && !hasOpenAIKey && !hasOpenRouterKey)
+  ? "groq"
+  : aiProviderRaw === "openrouter" || (!aiProviderRaw && hasOpenRouterKey && !hasOpenAIKey)
+    ? "openrouter"
+    : "openai";
 const aiMaxTokens = Number.parseInt(process.env.AI_MAX_TOKENS ?? "140", 10);
 const aiTimeoutMs = Number.parseInt(process.env.AI_TIMEOUT_MS ?? "15000", 10);
 const lavalinkPort = Number.parseInt(process.env.LAVALINK_PORT ?? "2333", 10);
@@ -32,6 +36,8 @@ export const env = {
   openRouterModel: process.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
   openRouterSiteUrl: process.env.OPENROUTER_SITE_URL?.trim(),
   openRouterAppName: process.env.OPENROUTER_APP_NAME?.trim() || "Nexus Discord Bot",
+  groqKey,
+  groqModel: process.env.GROQ_MODEL?.trim() || "llama-3.1-8b-instant",
   aiMaxTokens: Number.isFinite(aiMaxTokens) ? Math.max(60, Math.min(400, aiMaxTokens)) : 140,
   aiTimeoutMs: Number.isFinite(aiTimeoutMs) ? Math.max(3000, Math.min(60000, aiTimeoutMs)) : 15000,
   lavalinkHost: process.env.LAVALINK_HOST?.trim() || "127.0.0.1",
