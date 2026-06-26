@@ -56,6 +56,46 @@ The Supabase project used for this bot is `Browniezzz` at `https://yutvxacmxcsni
 
 The schema is saved in `supabase/migrations/001_discord_bot_core_schema.sql` and has already been applied to the `Browniezzz` project.
 
+## Web Dashboard
+
+The dashboard lives in `dashboard/` and runs as a separate Next.js app. It uses Discord OAuth to verify admins, reads the bot's guild list with the bot token, and saves server settings into the same Supabase `guild_configs` table the bot already uses.
+
+Dashboard `.env`:
+
+```env
+DISCORD_CLIENT_ID=your_discord_application_client_id
+DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret
+DISCORD_TOKEN=your_bot_token
+DASHBOARD_BASE_URL=http://31.42.125.11:3000
+DASHBOARD_SESSION_SECRET=replace_with_a_long_random_secret
+DATABASE_URL=postgresql://postgres.your_project_ref:your_password@aws-1-region.pooler.supabase.com:5432/postgres
+```
+
+In the Discord Developer Portal, add this OAuth2 redirect URI:
+
+```text
+http://31.42.125.11:3000/api/auth/callback
+```
+
+Local run:
+
+```bash
+cd dashboard
+npm install
+copy .env.example .env
+npm run dev
+```
+
+Production run:
+
+```bash
+cd dashboard
+npm ci
+npm run build
+pm2 start npm --name browniezzz-dashboard -- start -- -p 3000
+pm2 save
+```
+
 ## Developer Portal Settings
 
 Recommended first setup:

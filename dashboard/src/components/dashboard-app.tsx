@@ -1,0 +1,1045 @@
+"use client";
+
+import {
+  Bot,
+  Brain,
+  ChevronRight,
+  Crown,
+  Gauge,
+  Headphones,
+  Loader2,
+  LockKeyhole,
+  LogOut,
+  Music2,
+  RefreshCw,
+  Save,
+  Server,
+  Shield,
+  Sparkles,
+  Ticket,
+  Wand2,
+} from "lucide-react";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+type Guild = {
+  id: string;
+  name: string;
+  icon: string | null;
+};
+
+type MeResponse = {
+  user: {
+    id: string;
+    username: string;
+    avatar: string | null;
+  };
+  guilds: Guild[];
+};
+
+type Channel = {
+  id: string;
+  name: string;
+  type: number;
+};
+
+type Role = {
+  id: string;
+  name: string;
+  color: number;
+  position: number;
+  managed: boolean;
+};
+
+type AiPersona = "default" | "genz-girl" | "professional" | "sassy";
+
+type GuildConfig = {
+  guildId: string;
+  welcomeChannelId: string | null;
+  welcomeMessage: string | null;
+  logChannelId: string | null;
+  ticketCategoryId: string | null;
+  supportRoleId: string | null;
+  verifiedRoleId: string | null;
+  autoRoleId: string | null;
+  tempVoiceJoinChannelId: string | null;
+  tempVoiceCategoryId: string | null;
+  birthdayChannelId: string | null;
+  levelingEnabled: boolean;
+  levelUpChannelId: string | null;
+  aiResponderEnabled: boolean;
+  aiResponderChannelId: string | null;
+  aiResponderPrompt: string | null;
+  aiResponderPersona: AiPersona;
+  accentColor: number;
+  updatedAt: string | null;
+};
+
+type GuildPayload = {
+  config: GuildConfig;
+  channels: Channel[];
+  roles: Role[];
+};
+
+type TabKey = "overview" | "ai" | "welcome" | "support" | "levels" | "music";
+
+const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
+  { key: "overview", label: "Overview", icon: Gauge },
+  { key: "ai", label: "AI", icon: Brain },
+  { key: "welcome", label: "Welcome", icon: Sparkles },
+  { key: "support", label: "Support", icon: Ticket },
+  { key: "levels", label: "Levels", icon: Crown },
+  { key: "music", label: "Music", icon: Music2 }
+];
+
+const colorOptions = [
+  { label: "Cyan", value: 0x38dff8 },
+  { label: "Lime", value: 0xa7f950 },
+  { label: "Coral", value: 0xff5d7d },
+  { label: "Amber", value: 0xffbf47 },
+  { label: "Violet", value: 0x8d7aff }
+];
+
+const personaOptions: Array<{ key: AiPersona; label: string }> = [
+  { key: "genz-girl", label: "Gen Z" },
+  { key: "sassy", label: "Sassy" },
+  { key: "default", label: "Chill" },
+  { key: "professional", label: "Clean" }
+];
+
+function hexColor(value: number) {
+  return `#${value.toString(16).padStart(6, "0")}`;
+}
+
+function channelPrefix(type: number) {
+  if (type === 4) return "Category";
+  if (type === 2) return "Voice";
+  if (type === 13) return "Stage";
+  if (type === 15) return "Forum";
+  return "Text";
+}
+
+function displayChannel(channels: Channel[], channelId: string | null | undefined) {
+  if (!channelId) return "Not set";
+  const channel = channels.find((item) => item.id === channelId);
+  return channel ? `#${channel.name}` : "Missing channel";
+}
+
+function displayRole(roles: Role[], roleId: string | null | undefined) {
+  if (!roleId) return "Not set";
+  const role = roles.find((item) => item.id === roleId);
+  return role ? role.name : "Missing role";
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+}
+
+function textChannels(channels: Channel[]) {
+  return channels.filter((channel) => [0, 5, 15].includes(channel.type));
+}
+
+function categoryChannels(channels: Channel[]) {
+  return channels.filter((channel) => channel.type === 4);
+}
+
+function voiceChannels(channels: Channel[]) {
+  return channels.filter((channel) => [2, 13].includes(channel.type));
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange
+}: {
+  label: string;
+  value: string | null | undefined;
+  options: Array<{ id: string; name: string; type?: number }>;
+  placeholder: string;
+  onChange: (value: string | null) => void;
+}) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      <select className="select" value={value ?? ""} onChange={(event) => onChange(event.target.value || null)}>
+        <option value="">{placeholder}</option>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.type === undefined ? option.name : `${channelPrefix(option.type)} - ${option.name}`}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  label
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button className={`switch ${checked ? "on" : ""}`} type="button" aria-label={label} onClick={() => onChange(!checked)}>
+      <span />
+    </button>
+  );
+}
+
+function LoginScreen({ error }: { error: string | null }) {
+  return (
+    <main className="login-layout">
+      <section className="login-panel">
+        <div className="brand-mark">
+          <span className="brand-logo">
+            <Bot size={22} />
+          </span>
+          <div>
+            <strong>Browniezzz</strong>
+            <p className="muted">Premium bot console</p>
+          </div>
+        </div>
+
+        <h2>Command every server from one sharp little cockpit.</h2>
+        <p>
+          Login with Discord, pick a server, and tune the bot live: AI, welcome, roles, tickets, leveling, music, and the
+          visual style clients actually notice.
+        </p>
+
+        {error ? <div className="notice">{error}</div> : null}
+
+        <a className="primary-button" href="/api/auth/login">
+          <LockKeyhole size={18} />
+          Connect Discord
+        </a>
+      </section>
+
+      <section className="login-preview">
+        <div className="preview-topline">
+          <div>
+            <span className="kbd">LIVE DASHBOARD</span>
+            <h2 className="module-title">Server control surface</h2>
+          </div>
+          <div className="status-row">
+            <span className="dot" />
+            <span className="tiny">Ready</span>
+          </div>
+        </div>
+
+        <div className="mini-grid">
+          <article className="mini-command">
+            <span className="kbd">/ai setup</span>
+            <strong>Persona engine</strong>
+            <span className="muted">Channel locked, fast replies, custom voice.</span>
+          </article>
+          <article className="mini-command">
+            <span className="kbd">/music play</span>
+            <strong>Music deck</strong>
+            <span className="muted">Lavalink-ready queue controls.</span>
+          </article>
+          <article className="mini-command">
+            <span className="kbd">/setup</span>
+            <strong>Guild systems</strong>
+            <span className="muted">Welcome, roles, logs, tickets, levels.</span>
+          </article>
+          <article className="mini-command">
+            <span className="kbd">/giveaway</span>
+            <strong>Event tools</strong>
+            <span className="muted">Storage-backed server automation.</span>
+          </article>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function LoadingScreen() {
+  return (
+    <main className="loading-state">
+      <div className="brand-mark">
+        <span className="brand-logo">
+          <Loader2 size={22} className="spin" />
+        </span>
+        <div>
+          <strong>Browniezzz</strong>
+          <p className="muted">Syncing Discord and Supabase</p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export function DashboardApp() {
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [selectedGuildId, setSelectedGuildId] = useState<string>("");
+  const [payload, setPayload] = useState<GuildPayload | null>(null);
+  const [tab, setTab] = useState<TabKey>("overview");
+  const [loading, setLoading] = useState(true);
+  const [configLoading, setConfigLoading] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selectedGuild = useMemo(
+    () => me?.guilds.find((guild) => guild.id === selectedGuildId) ?? null,
+    [me?.guilds, selectedGuildId]
+  );
+
+  const config = payload?.config ?? null;
+  const channels = payload?.channels ?? [];
+  const roles = payload?.roles ?? [];
+
+  const loadMe = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const response = await fetch("/api/me", { cache: "no-store" });
+    if (response.status === 401) {
+      setMe(null);
+      setLoading(false);
+      return;
+    }
+
+    if (!response.ok) {
+      setError("Dashboard env is not ready yet. Check Discord OAuth and bot token values.");
+      setLoading(false);
+      return;
+    }
+
+    const nextMe = (await response.json()) as MeResponse;
+    setMe(nextMe);
+    setSelectedGuildId((current) => current || nextMe.guilds[0]?.id || "");
+    setLoading(false);
+  }, []);
+
+  const loadGuild = useCallback(async (guildId: string) => {
+    if (!guildId) return;
+    setConfigLoading(true);
+    setError(null);
+
+    const response = await fetch(`/api/guilds/${guildId}/config`, { cache: "no-store" });
+    if (!response.ok) {
+      setError("Could not load that server. Check bot permissions and Discord OAuth access.");
+      setConfigLoading(false);
+      return;
+    }
+
+    const nextPayload = (await response.json()) as GuildPayload;
+    setPayload(nextPayload);
+    setDirty(false);
+    setConfigLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void loadMe();
+  }, [loadMe]);
+
+  useEffect(() => {
+    if (selectedGuildId) void loadGuild(selectedGuildId);
+  }, [loadGuild, selectedGuildId]);
+
+  function updateConfig<K extends keyof GuildConfig>(key: K, value: GuildConfig[K]) {
+    setPayload((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        config: {
+          ...current.config,
+          [key]: value
+        }
+      };
+    });
+    setDirty(true);
+  }
+
+  async function saveConfig() {
+    if (!selectedGuildId || !config) return;
+    setSaving(true);
+    setError(null);
+
+    const response = await fetch(`/api/guilds/${selectedGuildId}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config)
+    });
+
+    if (!response.ok) {
+      setError("Save failed. Check Supabase connection and bot access.");
+      setSaving(false);
+      return;
+    }
+
+    const nextPayload = (await response.json()) as { config: GuildConfig };
+    setPayload((current) => (current ? { ...current, config: nextPayload.config } : current));
+    setDirty(false);
+    setSaving(false);
+  }
+
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/";
+  }
+
+  if (loading) return <LoadingScreen />;
+  if (!me) {
+    const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+    const authFailed = params.get("auth") === "failed";
+    return <LoginScreen error={authFailed ? "Discord login failed. Check the redirect URI and OAuth secret." : error} />;
+  }
+
+  if (me.guilds.length === 0) {
+    return (
+      <main className="empty-state">
+        <section className="login-panel">
+          <div className="brand-mark">
+            <span className="brand-logo">
+              <Server size={22} />
+            </span>
+            <div>
+              <strong>No servers found</strong>
+              <p className="muted">Invite the bot and give your Discord account Manage Server permission.</p>
+            </div>
+          </div>
+          <button className="ghost-button" type="button" onClick={logout}>
+            <LogOut size={17} />
+            Logout
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="app-shell">
+      <div className="dashboard-grid">
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-mark">
+              <span className="brand-logo">
+                <Bot size={22} />
+              </span>
+              <div>
+                <h1>Browniezzz</h1>
+                <p>Premium bot dashboard</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="server-strip">
+            {me.guilds.map((guild) => (
+              <button
+                className={`server-button ${guild.id === selectedGuildId ? "active" : ""}`}
+                key={guild.id}
+                type="button"
+                onClick={() => setSelectedGuildId(guild.id)}
+              >
+                {guild.icon ? (
+                  <img className="server-avatar" src={guild.icon} alt="" />
+                ) : (
+                  <span className="guild-initial">{initials(guild.name)}</span>
+                )}
+                <span>
+                  <span className="server-name">{guild.name}</span>
+                  <span className="server-meta muted">Connected</span>
+                </span>
+                <ChevronRight size={16} />
+              </button>
+            ))}
+          </div>
+
+          <nav className="nav">
+            {tabs.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  className={`nav-button ${tab === item.key ? "active" : ""}`}
+                  key={item.key}
+                  type="button"
+                  onClick={() => setTab(item.key)}
+                >
+                  <Icon size={18} />
+                  {item.label}
+                  {item.key === "ai" && config?.aiResponderEnabled ? <span className="dot" /> : null}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="user-bar">
+            <div className="user-mini">
+              {me.user.avatar ? <img className="user-avatar" src={me.user.avatar} alt="" /> : <span className="guild-initial">U</span>}
+              <div>
+                <strong>{me.user.username}</strong>
+                <span className="tiny">Discord admin</span>
+              </div>
+            </div>
+            <button className="icon-button" type="button" aria-label="Logout" onClick={logout}>
+              <LogOut size={18} />
+            </button>
+          </div>
+        </aside>
+
+        <section className="main">
+          <header className="topbar">
+            <div className="top-title">
+              <h2>{selectedGuild?.name ?? "Server"}</h2>
+              <p>
+                {dirty ? "Unsaved changes" : "Synced"} 
+                {config?.updatedAt ? ` - ${new Date(config.updatedAt).toLocaleString()}` : ""}
+              </p>
+            </div>
+
+            <div className="top-actions">
+              <select
+                className="select mobile-server-select"
+                value={selectedGuildId}
+                onChange={(event) => setSelectedGuildId(event.target.value)}
+              >
+                {me.guilds.map((guild) => (
+                  <option key={guild.id} value={guild.id}>
+                    {guild.name}
+                  </option>
+                ))}
+              </select>
+              <button className="ghost-button" type="button" onClick={() => loadGuild(selectedGuildId)} disabled={configLoading}>
+                <RefreshCw size={17} />
+                Refresh
+              </button>
+              <button className="primary-button" type="button" onClick={saveConfig} disabled={!dirty || saving || !config}>
+                {saving ? <Loader2 size={17} className="spin" /> : <Save size={17} />}
+                {dirty ? "Save" : "Saved"}
+              </button>
+            </div>
+          </header>
+
+          {error ? <div className="notice">{error}</div> : null}
+
+          <div className="content-grid">
+            <section className="module-stage">
+              {configLoading || !config ? (
+                <section className="panel">
+                  <div className="brand-mark">
+                    <Loader2 size={20} className="spin" />
+                    <strong>Loading server controls</strong>
+                  </div>
+                </section>
+              ) : (
+                <ModuleView
+                  tab={tab}
+                  config={config}
+                  channels={channels}
+                  roles={roles}
+                  updateConfig={updateConfig}
+                />
+              )}
+            </section>
+
+            {config ? (
+              <PreviewRail
+                config={config}
+                channels={channels}
+                roles={roles}
+                guildName={selectedGuild?.name ?? "your server"}
+              />
+            ) : null}
+          </div>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function ModuleView({
+  tab,
+  config,
+  channels,
+  roles,
+  updateConfig
+}: {
+  tab: TabKey;
+  config: GuildConfig;
+  channels: Channel[];
+  roles: Role[];
+  updateConfig: <K extends keyof GuildConfig>(key: K, value: GuildConfig[K]) => void;
+}) {
+  if (tab === "overview") {
+    const enabledCount = [
+      config.aiResponderEnabled,
+      Boolean(config.welcomeChannelId),
+      Boolean(config.ticketCategoryId),
+      config.levelingEnabled,
+      Boolean(config.tempVoiceJoinChannelId)
+    ].filter(Boolean).length;
+
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Pulse</h3>
+              <p className="muted">Live server setup in one scan.</p>
+            </div>
+            <span className="kbd">{enabledCount}/5 systems</span>
+          </div>
+
+          <div className="metric-grid">
+            <div className="metric">
+              <span>AI Channel</span>
+              <strong>{config.aiResponderEnabled ? "On" : "Off"}</strong>
+              <small className="muted">{displayChannel(channels, config.aiResponderChannelId)}</small>
+            </div>
+            <div className="metric">
+              <span>Welcome</span>
+              <strong>{config.welcomeChannelId ? "Ready" : "Unset"}</strong>
+              <small className="muted">{displayChannel(channels, config.welcomeChannelId)}</small>
+            </div>
+            <div className="metric">
+              <span>Tickets</span>
+              <strong>{config.ticketCategoryId ? "Ready" : "Unset"}</strong>
+              <small className="muted">{displayRole(roles, config.supportRoleId)}</small>
+            </div>
+            <div className="metric">
+              <span>Levels</span>
+              <strong>{config.levelingEnabled ? "On" : "Off"}</strong>
+              <small className="muted">{displayChannel(channels, config.levelUpChannelId)}</small>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Quick switches</h3>
+              <p className="muted">Flip high-traffic systems without leaving overview.</p>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="field">
+              <span className="field-label">AI auto reply</span>
+              <Toggle
+                checked={config.aiResponderEnabled}
+                label="Toggle AI auto reply"
+                onChange={(value) => updateConfig("aiResponderEnabled", value)}
+              />
+            </div>
+            <div className="field">
+              <span className="field-label">Leveling</span>
+              <Toggle
+                checked={config.levelingEnabled}
+                label="Toggle leveling"
+                onChange={(value) => updateConfig("levelingEnabled", value)}
+              />
+            </div>
+            <SelectField
+              label="Log channel"
+              value={config.logChannelId}
+              options={textChannels(channels)}
+              placeholder="No log channel"
+              onChange={(value) => updateConfig("logChannelId", value)}
+            />
+            <SelectField
+              label="Accent"
+              value={String(config.accentColor)}
+              options={colorOptions.map((item) => ({ id: String(item.value), name: item.label }))}
+              placeholder="Pick color"
+              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x38dff8))}
+            />
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (tab === "ai") {
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>AI auto responder</h3>
+              <p className="muted">The bot only auto-replies in the selected channel.</p>
+            </div>
+            <Toggle
+              checked={config.aiResponderEnabled}
+              label="Toggle AI auto responder"
+              onChange={(value) => updateConfig("aiResponderEnabled", value)}
+            />
+          </div>
+
+          <div className="form-grid">
+            <SelectField
+              label="AI channel"
+              value={config.aiResponderChannelId}
+              options={textChannels(channels)}
+              placeholder="Pick auto-reply channel"
+              onChange={(value) => updateConfig("aiResponderChannelId", value)}
+            />
+            <div className="field">
+              <span className="field-label">Persona</span>
+              <div className="segmented">
+                {personaOptions.map((persona) => (
+                  <button
+                    className={`pill-button ${config.aiResponderPersona === persona.key ? "active" : ""}`}
+                    key={persona.key}
+                    type="button"
+                    onClick={() => updateConfig("aiResponderPersona", persona.key)}
+                  >
+                    {persona.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="form-grid single">
+            <label className="field">
+              <span className="field-label">Custom behavior</span>
+              <textarea
+                className="textarea"
+                value={config.aiResponderPrompt ?? ""}
+                onChange={(event) => updateConfig("aiResponderPrompt", event.target.value)}
+              />
+            </label>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (tab === "welcome") {
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Welcome and roles</h3>
+              <p className="muted">Member entry, autorole, verification, birthday pings.</p>
+            </div>
+            <Wand2 size={21} />
+          </div>
+
+          <div className="form-grid">
+            <SelectField
+              label="Welcome channel"
+              value={config.welcomeChannelId}
+              options={textChannels(channels)}
+              placeholder="No welcome channel"
+              onChange={(value) => updateConfig("welcomeChannelId", value)}
+            />
+            <SelectField
+              label="Autorole"
+              value={config.autoRoleId}
+              options={roles}
+              placeholder="No autorole"
+              onChange={(value) => updateConfig("autoRoleId", value)}
+            />
+            <SelectField
+              label="Verified role"
+              value={config.verifiedRoleId}
+              options={roles}
+              placeholder="No verified role"
+              onChange={(value) => updateConfig("verifiedRoleId", value)}
+            />
+            <SelectField
+              label="Birthday channel"
+              value={config.birthdayChannelId}
+              options={textChannels(channels)}
+              placeholder="No birthday channel"
+              onChange={(value) => updateConfig("birthdayChannelId", value)}
+            />
+          </div>
+        </section>
+
+        <section className="panel">
+          <label className="field">
+            <span className="field-label">Welcome message</span>
+            <textarea
+              className="textarea"
+              value={config.welcomeMessage ?? ""}
+              onChange={(event) => updateConfig("welcomeMessage", event.target.value)}
+            />
+          </label>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Embed color</h3>
+              <p className="muted">Used across setup panels and premium embeds.</p>
+            </div>
+          </div>
+          <div className="color-row">
+            {colorOptions.map((color) => (
+              <button
+                className={`color-button ${config.accentColor === color.value ? "active" : ""}`}
+                key={color.value}
+                type="button"
+                aria-label={color.label}
+                onClick={() => updateConfig("accentColor", color.value)}
+              >
+                <span style={{ background: hexColor(color.value) }} />
+              </button>
+            ))}
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (tab === "support") {
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Ticket desk</h3>
+              <p className="muted">Private ticket category and staff controls.</p>
+            </div>
+            <Ticket size={21} />
+          </div>
+
+          <div className="form-grid">
+            <SelectField
+              label="Ticket category"
+              value={config.ticketCategoryId}
+              options={categoryChannels(channels)}
+              placeholder="No ticket category"
+              onChange={(value) => updateConfig("ticketCategoryId", value)}
+            />
+            <SelectField
+              label="Support role"
+              value={config.supportRoleId}
+              options={roles}
+              placeholder="No support role"
+              onChange={(value) => updateConfig("supportRoleId", value)}
+            />
+            <SelectField
+              label="Temp VC join"
+              value={config.tempVoiceJoinChannelId}
+              options={voiceChannels(channels)}
+              placeholder="No join-to-create VC"
+              onChange={(value) => updateConfig("tempVoiceJoinChannelId", value)}
+            />
+            <SelectField
+              label="Temp VC category"
+              value={config.tempVoiceCategoryId}
+              options={categoryChannels(channels)}
+              placeholder="No temp VC category"
+              onChange={(value) => updateConfig("tempVoiceCategoryId", value)}
+            />
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Moderation path</h3>
+              <p className="muted">Staff events, mod cases, and action logs.</p>
+            </div>
+            <Shield size={21} />
+          </div>
+          <SelectField
+            label="Log channel"
+            value={config.logChannelId}
+            options={textChannels(channels)}
+            placeholder="No log channel"
+            onChange={(value) => updateConfig("logChannelId", value)}
+          />
+        </section>
+      </>
+    );
+  }
+
+  if (tab === "levels") {
+    return (
+      <>
+        <section className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Leveling</h3>
+              <p className="muted">XP progression and level-up announcements.</p>
+            </div>
+            <Toggle
+              checked={config.levelingEnabled}
+              label="Toggle leveling"
+              onChange={(value) => updateConfig("levelingEnabled", value)}
+            />
+          </div>
+
+          <div className="form-grid">
+            <SelectField
+              label="Level-up channel"
+              value={config.levelUpChannelId}
+              options={textChannels(channels)}
+              placeholder="Same channel as message"
+              onChange={(value) => updateConfig("levelUpChannelId", value)}
+            />
+            <SelectField
+              label="Reward role anchor"
+              value={config.verifiedRoleId}
+              options={roles}
+              placeholder="No anchor role"
+              onChange={(value) => updateConfig("verifiedRoleId", value)}
+            />
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="metric-grid">
+            <div className="metric">
+              <span>XP cooldown</span>
+              <strong>60s</strong>
+              <small className="muted">Bot default</small>
+            </div>
+            <div className="metric">
+              <span>Leaderboard</span>
+              <strong>/top</strong>
+              <small className="muted">Global command</small>
+            </div>
+            <div className="metric">
+              <span>Rank card</span>
+              <strong>/rank</strong>
+              <small className="muted">User progress</small>
+            </div>
+            <div className="metric">
+              <span>Storage</span>
+              <strong>SQL</strong>
+              <small className="muted">Supabase</small>
+            </div>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h3>Music deck</h3>
+            <p className="muted">Lavalink status and premium playback defaults.</p>
+          </div>
+          <Headphones size={21} />
+        </div>
+
+        <div className="metric-grid">
+          <div className="metric">
+            <span>Playback</span>
+            <strong>Live</strong>
+            <small className="muted">Queue buttons active</small>
+          </div>
+          <div className="metric">
+            <span>Volume</span>
+            <strong>80%</strong>
+            <small className="muted">Bot default</small>
+          </div>
+          <div className="metric">
+            <span>Search</span>
+            <strong>YTM</strong>
+            <small className="muted">YouTube Music</small>
+          </div>
+          <div className="metric">
+            <span>Engine</span>
+            <strong>Lava</strong>
+            <small className="muted">Node connected</small>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-heading">
+          <div>
+            <h3>DJ controls</h3>
+            <p className="muted">Use support role as trusted control access.</p>
+          </div>
+          <Music2 size={21} />
+        </div>
+        <SelectField
+          label="DJ role"
+          value={config.supportRoleId}
+          options={roles}
+          placeholder="No DJ role"
+          onChange={(value) => updateConfig("supportRoleId", value)}
+        />
+      </section>
+    </>
+  );
+}
+
+function PreviewRail({
+  config,
+  channels,
+  roles,
+  guildName
+}: {
+  config: GuildConfig;
+  channels: Channel[];
+  roles: Role[];
+  guildName: string;
+}) {
+  const welcome = (config.welcomeMessage ?? "")
+    .replaceAll("{user}", "@Raven")
+    .replaceAll("{server}", guildName)
+    .replaceAll("{count}", "247");
+
+  return (
+    <aside className="preview-stack">
+      <section className="preview-panel">
+        <h3>Embed preview</h3>
+        <div
+          className="discord-preview"
+          style={{ "--preview-accent": hexColor(config.accentColor) } as CSSProperties & Record<"--preview-accent", string>}
+        >
+          <strong>Browniezzz</strong>
+          <p>{welcome || "Welcome @Raven to your server."}</p>
+        </div>
+      </section>
+
+      <section className="preview-panel">
+        <h3>Active routes</h3>
+        <div className="activity-feed">
+          <div className="activity-item">
+            <span>AI</span>
+            <strong>{config.aiResponderEnabled ? displayChannel(channels, config.aiResponderChannelId) : "Off"}</strong>
+          </div>
+          <div className="activity-item">
+            <span>Welcome</span>
+            <strong>{displayChannel(channels, config.welcomeChannelId)}</strong>
+          </div>
+          <div className="activity-item">
+            <span>Staff</span>
+            <strong>{displayRole(roles, config.supportRoleId)}</strong>
+          </div>
+          <div className="activity-item">
+            <span>Temp VC</span>
+            <strong>{displayChannel(channels, config.tempVoiceJoinChannelId)}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-panel">
+        <h3>Command stack</h3>
+        <div className="button-row">
+          <span className="kbd">/setup</span>
+          <span className="kbd">/ai</span>
+          <span className="kbd">/music</span>
+          <span className="kbd">/ticket-panel</span>
+        </div>
+      </section>
+    </aside>
+  );
+}
