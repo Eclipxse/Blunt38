@@ -3,7 +3,6 @@
 import {
   ArrowRight,
   AudioLines,
-  Bot,
   Brain,
   ChevronRight,
   CirclePlay,
@@ -297,7 +296,7 @@ function LoginScreen({ error }: { error: string | null }) {
         <header className="auth-topbar">
           <div className="auth-brand">
             <span className="auth-brand-mark">
-              <Bot size={22} />
+              <img src="/brand/brownie-icon.png" alt="" />
             </span>
             <span>
               <strong>Browniezzz</strong>
@@ -341,6 +340,8 @@ function LoginScreen({ error }: { error: string | null }) {
                 Bot synced
               </span>
             </div>
+
+            <img className="auth-wide-banner" src="/brand/brownie-welcome.png" alt="" />
           </aside>
 
           <section className="auth-workbench">
@@ -407,7 +408,7 @@ function LoginScreen({ error }: { error: string | null }) {
               <div className="live-module-panel">
                 <div className="module-panel-head">
                   <span className="live-module-icon">
-                    <ActiveIcon size={22} />
+                    {active.key === "ai" ? <img src="/brand/brownie-icon.png" alt="" /> : <ActiveIcon size={22} />}
                   </span>
                   <div>
                     <strong>{active.title}</strong>
@@ -636,12 +637,12 @@ export function DashboardApp() {
       <div className="dashboard-grid">
         <aside className="sidebar">
           <div className="brand">
-            <div className="brand-mark">
-              <span className="brand-logo">
-                <Bot size={22} />
-              </span>
-              <div>
-                <h1>Browniezzz</h1>
+          <div className="brand-mark">
+            <span className="brand-logo">
+              <img src="/brand/brownie-icon.png" alt="" />
+            </span>
+            <div>
+              <h1>Browniezzz</h1>
                 <p>Premium bot dashboard</p>
               </div>
             </div>
@@ -1210,6 +1211,10 @@ function PreviewRail({
 
   return (
     <aside className="preview-stack">
+      <section className="preview-panel brand-preview-panel">
+        <img className="brand-preview-image" src="/brand/brownie-welcome.png" alt="" />
+      </section>
+
       <section className="preview-panel">
         <h3>Embed preview</h3>
         <div

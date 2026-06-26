@@ -1,31 +1,104 @@
-# Discord Premium Bot
+<p align="center">
+  <img src="dashboard/public/brand/brownie-cloud.png" alt="Browniezzz banner" width="100%" />
+</p>
 
-A UI-first Discord bot built with TypeScript and discord.js.
+<p align="center">
+  <img src="dashboard/public/brand/brownie-icon.png" alt="Browniezzz icon" width="96" />
+</p>
 
-## Features
+<h1 align="center">Browniezzz Discord Bot</h1>
 
-- Slash commands only, so Message Content Intent can stay off.
-- Premium setup panel with buttons, channel selects, role selects, and modals.
-- Give/remove role commands and autorole on join.
-- Configurable welcome messages with `{user}` and `{server}` placeholders.
-- Ticket panel with ticket creation, claim, lock, transcript, and close actions.
-- Role panel with dropdown-based self roles.
-- Moderation panel with warn, timeout, kick, ban, and history.
-- Giveaways with entry buttons, winner picking, and background ending.
-- Polls with live vote buttons.
-- Suggestion panel with modal input and approve/deny/discuss buttons.
-- Temp VC generator with join-to-create voice channels and empty-channel cleanup.
-- Leveling, rank, and leaderboard commands.
-- Embed builder modal.
-- Birthday tracking and daily birthday announcements.
-- Server info and user info commands.
-- Emoji and sticker manager commands.
-- AI chat channel with admin setup, plus `/ai ask` for one-off replies anywhere.
-- Mini games: coinflip, dice, and Rock Paper Scissors buttons.
-- Music playback through Lavalink with slash commands and button controls.
-- JSON or Supabase Postgres-backed configuration.
+<p align="center">
+  A premium, UI-first Discord bot with moderation, welcome systems, AI replies, tickets, leveling, giveaways, music, and a web dashboard.
+</p>
 
-## Local Setup
+<p align="center">
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-5.x-38dff8?style=for-the-badge&labelColor=111827" />
+  <img alt="discord.js" src="https://img.shields.io/badge/discord.js-v14-8d7aff?style=for-the-badge&labelColor=111827" />
+  <img alt="Next.js" src="https://img.shields.io/badge/Dashboard-Next.js-a7f950?style=for-the-badge&labelColor=111827" />
+  <img alt="Storage" src="https://img.shields.io/badge/Storage-Supabase-ffbf47?style=for-the-badge&labelColor=111827" />
+  <img alt="Music" src="https://img.shields.io/badge/Music-Lavalink-ff5d7d?style=for-the-badge&labelColor=111827" />
+</p>
+
+<p align="center">
+  <img src="dashboard/public/brand/brownie-welcome.png" alt="Welcome to Brownie" width="100%" />
+</p>
+
+## What Is Browniezzz?
+
+Browniezzz is a full-service Discord bot made for community servers that need more than a few basic commands. It includes setup panels, button-driven flows, configurable server systems, AI replies, and Lavalink-powered music playback.
+
+The project also ships with a separate web dashboard in `dashboard/`, so server admins can configure the bot from a browser instead of only using slash commands.
+
+## Core Stack
+
+| Layer | Tech | Why it exists |
+| --- | --- | --- |
+| Bot runtime | Node.js + TypeScript | Strong typing and fast development |
+| Discord API | `discord.js` v14 | Slash commands, embeds, buttons, modals, channel/role selectors |
+| AI providers | Groq, OpenRouter, OpenAI-compatible APIs | Fast AI replies and configurable personas |
+| Music engine | Lavalink | Stable voice playback without overloading the bot process |
+| Database | Supabase Postgres or local JSON | Production storage with quick local testing fallback |
+| Dashboard | Next.js | Browser-based admin control panel |
+| Process manager | PM2 | VPS uptime and restarts |
+
+## Feature Map
+
+| System | Included |
+| --- | --- |
+| Setup UI | Button-based `/setup` panel with channel selects, role selects, modals, and reset controls |
+| Welcome | Custom welcome channel, welcome text, autorole, verified role, birthday channel |
+| AI | `/ai ask`, channel-limited auto replies, custom prompt, personas, Groq/OpenRouter/OpenAI support |
+| Music | Lavalink playback, queue, pause, resume, skip, stop, shuffle, volume, loop, now playing |
+| Tickets | Ticket panel, category routing, ticket modal, claim, lock, transcript, close confirmation |
+| Moderation | Warn, timeout, kick, ban, history, mod-case storage |
+| Giveaways | Button entry, winner count, automatic ending, database-backed entrants |
+| Polls | Multi-option polls with live vote buttons |
+| Suggestions | Suggestion modal with approve, deny, and discuss actions |
+| Leveling | XP, rank card, leaderboard, level-up channel |
+| Temp Voice | Join-to-create voice channels and empty-channel cleanup |
+| Roles | Admin give/remove role commands and dropdown self-role panels |
+| Embeds | Modal-powered embed builder |
+| Birthdays | Birthday storage and daily birthday announcements |
+| Server Tools | Server info, user info, emoji manager, sticker manager |
+| Mini Games | Coinflip, dice, Rock Paper Scissors buttons |
+| Dashboard | Discord OAuth, server selector, live Discord roles/channels, Supabase config saves |
+
+## Architecture
+
+```mermaid
+flowchart LR
+  Admin["Discord Admin"] --> Dashboard["Next.js Dashboard"]
+  Admin --> Discord["Discord Slash Commands"]
+  Dashboard --> OAuth["Discord OAuth"]
+  Dashboard --> BotAPI["Discord Bot API"]
+  Dashboard --> DB["Supabase Postgres"]
+  Discord --> Bot["Browniezzz Bot"]
+  Bot --> DB
+  Bot --> AI["Groq / OpenRouter / OpenAI"]
+  Bot --> Lava["Lavalink"]
+  Lava --> Voice["Discord Voice"]
+```
+
+## Project Structure
+
+```text
+.
+├── src/                         # Discord bot source
+│   ├── commands/                # Slash commands
+│   ├── interactions/            # Button/select/modal handlers
+│   ├── services/                # Store, AI, music, giveaways, messages
+│   └── utils/                   # Shared helpers
+├── dashboard/                   # Next.js web dashboard
+│   ├── public/brand/            # Browniezzz images used by README and site
+│   └── src/app/api/             # OAuth, session, guild config API routes
+├── lavalink/                    # Lavalink config example and setup notes
+├── supabase/migrations/         # Postgres schema
+├── .env.example                 # Bot env template
+└── README.md
+```
+
+## Quick Start For Local Testing
 
 ```bash
 npm install
@@ -33,102 +106,103 @@ copy .env.example .env
 npm run dev
 ```
 
-Paste your token into `.env` as `DISCORD_TOKEN`. Keep `.env` private.
+Put your bot token in `.env`:
 
-For fast slash-command updates while testing, set `DISCORD_GUILD_ID` to your test server ID. If you leave it empty, commands are registered globally and may take longer to show.
+```env
+DISCORD_TOKEN=your_bot_token
+```
 
-## Storage
+For faster slash-command updates while testing, set:
 
-Local testing uses JSON by default:
+```env
+DISCORD_GUILD_ID=your_test_server_id
+REGISTER_COMMANDS_ON_START=true
+```
+
+If `DISCORD_GUILD_ID` is empty, commands register globally and can take longer to appear.
+
+## Discord Developer Portal Setup
+
+Create or open your app in the Discord Developer Portal.
+
+Recommended bot settings:
+
+| Setting | Value |
+| --- | --- |
+| Public Bot | On |
+| Requires OAuth2 Code Grant | Off |
+| Presence Intent | Off unless needed |
+| Server Members Intent | On |
+| Message Content Intent | On only if AI auto-replies to normal messages |
+
+Invite scopes:
+
+```text
+bot
+applications.commands
+```
+
+For testing, invite with Administrator permission. For production, reduce permissions later based on which modules you enable.
+
+## Storage Modes
+
+### Local JSON
+
+Good for quick testing:
 
 ```env
 STORAGE_DRIVER=json
 ```
 
-Production should use Supabase Postgres:
+### Supabase Postgres
+
+Recommended for production:
 
 ```env
 STORAGE_DRIVER=postgres
-DATABASE_URL=postgresql://postgres:your_database_password@db.yutvxacmxcsnibrxosfw.supabase.co:5432/postgres?sslmode=require
+DATABASE_URL=postgresql://postgres.project_ref:password@aws-1-region.pooler.supabase.com:5432/postgres
 ```
 
-The Supabase project used for this bot is `Browniezzz` at `https://yutvxacmxcsnibrxosfw.supabase.co`. Get the real database password/connection string from Supabase Project Settings -> Database, paste it into `.env`, then restart the bot.
-
-The schema is saved in `supabase/migrations/001_discord_bot_core_schema.sql` and has already been applied to the `Browniezzz` project.
-
-## Web Dashboard
-
-The dashboard lives in `dashboard/` and runs as a separate Next.js app. It uses Discord OAuth to verify admins, reads the bot's guild list with the bot token, and saves server settings into the same Supabase `guild_configs` table the bot already uses.
-
-Dashboard `.env`:
-
-```env
-DISCORD_CLIENT_ID=your_discord_application_client_id
-DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret
-DISCORD_TOKEN=your_bot_token
-DASHBOARD_BASE_URL=http://31.42.125.11:3000
-DASHBOARD_SESSION_SECRET=replace_with_a_long_random_secret
-DATABASE_URL=postgresql://postgres.your_project_ref:your_password@aws-1-region.pooler.supabase.com:5432/postgres
-```
-
-In the Discord Developer Portal, add this OAuth2 redirect URI:
+Apply the schema from:
 
 ```text
-http://31.42.125.11:3000/api/auth/callback
+supabase/migrations/001_discord_bot_core_schema.sql
 ```
 
-Local run:
+The bot stores guild config, mod cases, polls, role panels, giveaways, levels, birthdays, and temp voice channels.
 
-```bash
-cd dashboard
-npm install
-copy .env.example .env
-npm run dev
+## AI Setup
+
+Browniezzz supports multiple OpenAI-compatible providers.
+
+### Groq
+
+Fastest recommended option for Discord replies:
+
+```env
+AI_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=llama-3.1-8b-instant
+AI_MAX_TOKENS=140
+AI_TIMEOUT_MS=15000
+ENABLE_MESSAGE_CONTENT_INTENT=true
 ```
 
-Production run:
+### OpenRouter
 
-```bash
-cd dashboard
-npm ci
-npm run build
-pm2 start npm --name browniezzz-dashboard -- start -- -p 3000
-pm2 save
+```env
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=your_openrouter_key
+OPENROUTER_MODEL=openrouter/free
+OPENROUTER_APP_NAME=Browniezzz
+AI_MAX_TOKENS=140
+AI_TIMEOUT_MS=15000
+ENABLE_MESSAGE_CONTENT_INTENT=true
 ```
 
-## Developer Portal Settings
+Use a chat model for replies. Rerank models are for sorting documents and will not generate normal Discord chat responses.
 
-Recommended first setup:
-
-- Public Bot: on
-- Requires OAuth2 Code Grant: off
-- Presence Intent: off
-- Server Members Intent: on
-- Message Content Intent: off unless you enable AI channel auto-replies
-
-Invite scopes:
-
-- `bot`
-- `applications.commands`
-
-Start with Administrator permission while testing. Later, reduce permissions to only what you use.
-
-## Discord Intents
-
-The bot code uses:
-
-- Guilds
-- Guild Members
-- Guild Moderation
-- Guild Messages
-- Guild Voice States
-- Message Content only when `ENABLE_MESSAGE_CONTENT_INTENT=true`
-
-Enable **Server Members Intent** in the Developer Portal for welcome and autorole. Enable **Message Content Intent** only if you want AI to auto-reply to normal messages in the configured AI channel.
-
-## AI Replies
-
-Set these in `.env`:
+### OpenAI-Compatible
 
 ```env
 AI_PROVIDER=openai
@@ -137,54 +211,23 @@ OPENAI_MODEL=gpt-5.4-mini
 ENABLE_MESSAGE_CONTENT_INTENT=true
 ```
 
-For fast Groq replies:
+Useful AI commands:
 
-```env
-AI_PROVIDER=groq
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=llama-3.1-8b-instant
-ENABLE_MESSAGE_CONTENT_INTENT=true
+```text
+/ai ask
+/ai setup
+/ai persona
+/ai prompt
+/ai disable
 ```
 
-For OpenRouter:
+Auto replies only happen in the channel configured by an admin. Users can still use `/ai ask` anywhere.
 
-```env
-AI_PROVIDER=openrouter
-OPENROUTER_API_KEY=your_openrouter_key
-OPENROUTER_MODEL=openrouter/free
-OPENROUTER_APP_NAME=Nexus Discord Bot
-ENABLE_MESSAGE_CONTENT_INTENT=true
-```
+## Music Setup
 
-Use a chat model for Discord replies. Rerank models such as `nvidia/llama-nemotron-rerank-vl-1b-v2:free` are for sorting documents by relevance and cannot generate normal chat replies.
+Music uses Lavalink as a separate Java process.
 
-Groq model notes:
-
-- `llama-3.1-8b-instant` is the recommended fast model for Discord auto-replies.
-- `llama-3.3-70b-versatile` gives stronger replies, but is slower and has tighter limits.
-
-Useful commands:
-
-- `/ai ask` asks a one-off question in any channel.
-- `/ai setup channel:#chat` makes the bot auto-reply only in that channel.
-- `/ai persona preset:Gen Z girl` gives the bot a casual slang-heavy personality.
-- `/ai prompt` changes the bot's personality for this server.
-- `/ai disable` turns auto replies off.
-
-Speed knobs in `.env`:
-
-```env
-AI_MAX_TOKENS=140
-AI_TIMEOUT_MS=15000
-```
-
-Lower `AI_MAX_TOKENS` means shorter, usually faster replies. Groq is usually much faster than free OpenRouter routes for short Discord replies.
-
-## Music
-
-Music uses Lavalink, which is a separate Java audio server. Start Lavalink first, then start this bot.
-
-Bot `.env`:
+Bot env:
 
 ```env
 LAVALINK_HOST=127.0.0.1
@@ -195,61 +238,205 @@ MUSIC_SEARCH_SOURCE=ytmsearch
 MUSIC_DEFAULT_VOLUME=80
 ```
 
-Copy `lavalink/application.example.yml` to your VPS as `/opt/lavalink/application.yml`, then run Lavalink with Java 17+:
+Start Lavalink first, then start the bot.
 
 ```bash
 java -Xmx1G -jar Lavalink.jar
 ```
 
-See `lavalink/README.md` for the full VPS setup and systemd service.
+For VPS service setup, see:
+
+```text
+lavalink/README.md
+```
 
 Music commands:
 
-- `/music play query:song name or link`
-- `/music pause`
-- `/music resume`
-- `/music skip`
-- `/music stop`
-- `/music queue`
-- `/music nowplaying`
-- `/music volume percent:80`
-- `/music loop mode:off|track|queue`
-- `/music shuffle`
-- `/music remove position:1`
+```text
+/music play
+/music pause
+/music resume
+/music skip
+/music stop
+/music queue
+/music nowplaying
+/music volume
+/music loop
+/music shuffle
+/music remove
+```
 
-YouTube and YouTube Music search work through the Lavalink YouTube plugin. Spotify/Apple/Deezer links need the optional LavaSrc plugin plus Spotify developer credentials, and they resolve metadata rather than ripping audio directly from Spotify.
+YouTube and YouTube Music search work through the Lavalink YouTube plugin. Spotify, Apple Music, and Deezer links require extra Lavalink plugins and credentials.
+
+## Web Dashboard
+
+The dashboard is in:
+
+```text
+dashboard/
+```
+
+It provides:
+
+| Dashboard Area | What it controls |
+| --- | --- |
+| Overview | Server config health, quick switches, logs |
+| AI | AI channel, auto-reply toggle, persona, custom prompt |
+| Welcome | Welcome channel, message, autorole, verified role, birthday channel |
+| Support | Ticket category, support role, temp voice settings, log channel |
+| Levels | Leveling toggle and level-up channel |
+| Music | Lavalink music defaults and DJ-role mapping |
+
+Dashboard env:
+
+```env
+DISCORD_CLIENT_ID=your_discord_application_client_id
+DISCORD_CLIENT_SECRET=your_discord_oauth_client_secret
+DISCORD_TOKEN=your_bot_token
+DASHBOARD_BASE_URL=http://your_server_ip_or_domain:3000
+DASHBOARD_SESSION_SECRET=replace_with_a_long_random_secret
+DATABASE_URL=postgresql://postgres.project_ref:password@aws-1-region.pooler.supabase.com:5432/postgres
+```
+
+Discord OAuth redirect URI:
+
+```text
+http://your_server_ip_or_domain:3000/api/auth/callback
+```
+
+Local dashboard:
+
+```bash
+cd dashboard
+npm install
+copy .env.example .env
+npm run dev
+```
+
+Production dashboard:
+
+```bash
+cd dashboard
+npm ci
+npm run build
+pm2 start npm --name browniezzz-dashboard -- start -- -p 3000
+pm2 save
+```
+
+## VPS Deployment Flow
+
+Recommended layout:
+
+```text
+/opt/browniezzz       # bot + dashboard
+/opt/lavalink         # Lavalink jar + application.yml
+```
+
+Install runtime:
+
+```bash
+apt update
+apt install -y git curl unzip openjdk-17-jre
+```
+
+Install Node with `nvm`, then use Node 24:
+
+```bash
+nvm install 24
+nvm use 24
+node -v
+npm -v
+```
+
+Clone and build:
+
+```bash
+cd /opt
+git clone https://github.com/Eclipxse/Brownizzz.git browniezzz
+cd /opt/browniezzz
+npm ci
+npm run build
+```
+
+Start bot:
+
+```bash
+pm2 start dist/index.js --name browniezzz-bot
+pm2 save
+```
+
+Start dashboard:
+
+```bash
+cd /opt/browniezzz/dashboard
+npm ci
+npm run build
+pm2 start npm --name browniezzz-dashboard -- start -- -p 3000
+pm2 save
+```
+
+Useful PM2 commands:
+
+```bash
+pm2 status
+pm2 logs browniezzz-bot
+pm2 logs browniezzz-dashboard
+pm2 restart browniezzz-bot --update-env
+pm2 restart browniezzz-dashboard --update-env
+```
 
 ## Main Commands
 
-- `/setup`
-- `/ai`
-- `/welcome`
-- `/role`
-- `/ticket-panel`
-- `/role-panel`
-- `/moderate`
-- `/giveaway`
-- `/poll`
-- `/suggest-panel`
-- `/tempvc`
-- `/leveling`
-- `/rank`
-- `/leaderboard`
-- `/embed create`
-- `/birthday`
-- `/serverinfo`
-- `/userinfo`
-- `/emoji`
-- `/sticker`
-- `/minigame`
-- `/music`
+| Category | Commands |
+| --- | --- |
+| Setup | `/setup`, `/welcome`, `/role`, `/role-panel` |
+| AI | `/ai ask`, `/ai setup`, `/ai persona`, `/ai prompt`, `/ai disable` |
+| Moderation | `/moderate`, `/userinfo`, `/serverinfo` |
+| Tickets | `/ticket-panel` |
+| Events | `/giveaway`, `/poll`, `/suggest-panel`, `/birthday` |
+| Levels | `/leveling`, `/rank`, `/leaderboard` |
+| Utility | `/embed create`, `/emoji`, `/sticker` |
+| Fun | `/minigame` |
+| Music | `/music play`, `/music queue`, `/music nowplaying`, `/music skip`, `/music stop` |
 
 ## Hosting Size
 
-For one bot serving a small-to-medium set of Discord servers:
+| Use case | VPS size |
+| --- | --- |
+| Bot without music | 1 vCPU, 1 GB RAM |
+| Bot with music | 1 vCPU, 2 GB RAM |
+| Bot + dashboard + Lavalink | 2 vCPU, 4 GB RAM |
 
-- Minimum without music: 1 vCPU, 1 GB RAM
-- Minimum with music: 1 vCPU, 2 GB RAM
-- Comfortable with website + bot + Lavalink: 2 vCPU, 4 GB RAM
+Your existing 4 GB RAM VPS is enough for the bot, dashboard, Lavalink, and a small website if traffic is normal.
 
-This version can store data in JSON for quick launch or Supabase Postgres for production. Use Postgres before putting the bot in client servers long-term.
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| Slash command says application did not respond | Check bot logs with `pm2 logs browniezzz-bot` |
+| AI command fails | Check `AI_PROVIDER`, API key, model name, and rate limits |
+| AI auto reply does nothing | Enable Message Content Intent and configure `/ai setup` |
+| Lavalink offline | Start Lavalink and verify `curl -H "Authorization: youshallnotpass" http://127.0.0.1:2333/v4/info` |
+| Supabase auth failed | Use the exact pooler connection string and URL-encode special password characters |
+| Dashboard login fails | Check Discord OAuth redirect URI and `DASHBOARD_BASE_URL` |
+| Dashboard shows no servers | Bot must be in the server and your Discord account needs Manage Server or Administrator |
+
+## Safety Notes
+
+- Never commit `.env`.
+- Rotate leaked Discord tokens immediately.
+- Keep the bot token server-side only.
+- Use Supabase Postgres for client/server production use.
+- Do not run multiple bot processes with the same token unless you know why.
+
+## Brand Assets
+
+The Browniezzz assets used by the README and dashboard live here:
+
+```text
+dashboard/public/brand/brownie-cloud.png
+dashboard/public/brand/brownie-icon.png
+dashboard/public/brand/brownie-welcome.png
+```
+
+These images are loaded by the website and rendered directly in this README.
