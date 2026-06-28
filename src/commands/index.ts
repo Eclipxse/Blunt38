@@ -13,6 +13,7 @@ import { musicCommand } from "./music.js";
 import { pollCommand } from "./poll.js";
 import { roleCommand } from "./role.js";
 import { rolePanelCommand } from "./role-panel.js";
+import { serverBuilderCommand } from "./server-builder.js";
 import { setupCommand } from "./setup.js";
 import { suggestPanelCommand } from "./suggest-panel.js";
 import { tempVcCommand } from "./temp-vc.js";
@@ -28,6 +29,7 @@ export const commands: Command[] = [
   roleCommand,
   ticketPanelCommand,
   rolePanelCommand,
+  serverBuilderCommand,
   moderateCommand,
   pollCommand,
   suggestPanelCommand,
