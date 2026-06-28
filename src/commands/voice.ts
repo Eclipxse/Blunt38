@@ -1,12 +1,20 @@
 import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { env } from "../env.js";
 import { logToGuild } from "../services/logger.js";
 import type { Command } from "../types.js";
+
+function canUseVoiceCommand(userId: string, hasMoveMembers: boolean) {
+  if (env.voiceControlUserIds.length) {
+    return env.voiceControlUserIds.includes(userId);
+  }
+
+  return hasMoveMembers;
+}
 
 export const voiceCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("voice")
     .setDescription("Moderate voice channel members.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
     .setDMPermission(false)
     .addSubcommand((subcommand) =>
       subcommand
@@ -28,8 +36,14 @@ export const voiceCommand: Command = {
   async execute(interaction) {
     if (!interaction.guild || !interaction.guildId) return;
 
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.MoveMembers)) {
-      await interaction.reply({ content: "You need Move Members permission to disconnect users from voice.", flags: MessageFlags.Ephemeral });
+    const hasMoveMembers = Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.MoveMembers));
+    if (!canUseVoiceCommand(interaction.user.id, hasMoveMembers)) {
+      await interaction.reply({
+        content: env.voiceControlUserIds.length
+          ? "You are not in the voice control allowlist."
+          : "You need Move Members permission to disconnect users from voice.",
+        flags: MessageFlags.Ephemeral
+      });
       return;
     }
 

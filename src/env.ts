@@ -18,6 +18,10 @@ const aiTimeoutMs = Number.parseInt(process.env.AI_TIMEOUT_MS ?? "15000", 10);
 const lavalinkPort = Number.parseInt(process.env.LAVALINK_PORT ?? "2333", 10);
 const musicDefaultVolume = Number.parseInt(process.env.MUSIC_DEFAULT_VOLUME ?? "80", 10);
 const storageDriverRaw = process.env.STORAGE_DRIVER?.trim().toLowerCase();
+const voiceControlUserIds = (process.env.VOICE_CONTROL_USER_IDS ?? "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
 
 if (!token || token === "put_your_bot_token_here") {
   throw new Error("Missing DISCORD_TOKEN. Create .env from .env.example and add your bot token.");
@@ -48,5 +52,6 @@ export const env = {
   musicDefaultVolume: Number.isFinite(musicDefaultVolume) ? Math.max(1, Math.min(100, musicDefaultVolume)) : 80,
   storageDriver: storageDriverRaw === "postgres" ? "postgres" : "json",
   databaseUrl: process.env.DATABASE_URL?.trim(),
-  brandName: process.env.BOT_BRAND_NAME?.trim() || "Nexus"
+  brandName: process.env.BOT_BRAND_NAME?.trim() || "Nexus",
+  voiceControlUserIds
 };
