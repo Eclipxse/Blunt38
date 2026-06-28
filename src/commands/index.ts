@@ -17,6 +17,7 @@ import { setupCommand } from "./setup.js";
 import { suggestPanelCommand } from "./suggest-panel.js";
 import { tempVcCommand } from "./temp-vc.js";
 import { ticketPanelCommand } from "./ticket-panel.js";
+import { voiceCommand } from "./voice.js";
 import { welcomeCommand } from "./welcome.js";
 
 export const commands: Command[] = [
@@ -42,7 +43,8 @@ export const commands: Command[] = [
   emojiCommand,
   stickerCommand,
   minigameCommand,
-  musicCommand
+  musicCommand,
+  voiceCommand
 ];
 
 export const commandMap = new Map(commands.map((command) => [command.data.name, command]));

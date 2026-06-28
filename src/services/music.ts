@@ -22,14 +22,24 @@ let manager: LavalinkManager | null = null;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink, wait 10 seconds, then restart the bot so it can attach to a usable node.";
+const spotifyUnavailableMessage =
+  "Spotify links are not enabled on Lavalink yet. Use a song name or YouTube link for now, or enable the LavaSrc Spotify plugin with Spotify client credentials.";
 
 function isMissingLavalinkNodeError(error: unknown) {
   return error instanceof Error && /no lavalink node/i.test(error.message);
 }
 
+function isSpotifySourceError(error: unknown) {
+  return error instanceof Error && /spotify/i.test(error.message) && /enabled|source|lavasrc/i.test(error.message);
+}
+
 function explainLavalinkError(error: unknown): never {
   if (isMissingLavalinkNodeError(error)) {
     throw new Error(lavalinkUnavailableMessage);
+  }
+
+  if (isSpotifySourceError(error)) {
+    throw new Error(spotifyUnavailableMessage);
   }
 
   throw error;
