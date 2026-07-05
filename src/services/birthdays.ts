@@ -32,6 +32,12 @@ export function startBirthdayScheduler(client: Client) {
     }
   };
 
-  void check();
-  return setInterval(() => void check(), 60 * 60 * 1000);
+  const runCheck = () => {
+    void check().catch((error) => {
+      console.error("Birthday scheduler failed:", error);
+    });
+  };
+
+  runCheck();
+  return setInterval(runCheck, 60 * 60 * 1000);
 }

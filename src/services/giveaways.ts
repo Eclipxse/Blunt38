@@ -96,6 +96,12 @@ export function startGiveawayScheduler(client: Client) {
     );
   };
 
-  void check();
-  return setInterval(() => void check(), 30_000);
+  const runCheck = () => {
+    void check().catch((error) => {
+      console.error("Giveaway scheduler failed:", error);
+    });
+  };
+
+  runCheck();
+  return setInterval(runCheck, 30_000);
 }

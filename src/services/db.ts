@@ -15,10 +15,20 @@ export function postgresEnabled() {
 
 export function getPool() {
   if (!postgresEnabled()) return null;
-  pool ??= new Pool({
-    connectionString: env.databaseUrl,
-    ssl: env.databaseUrl?.includes("supabase.co") ? { rejectUnauthorized: false } : undefined
-  });
+  if (!pool) {
+    pool = new Pool({
+      connectionString: env.databaseUrl,
+      ssl: env.databaseUrl?.includes("supabase.co") ? { rejectUnauthorized: false } : undefined,
+      connectionTimeoutMillis: 10_000,
+      idleTimeoutMillis: 30_000,
+      keepAlive: true
+    });
+
+    pool.on("error", (error) => {
+      console.error("Postgres pool background error:", error);
+    });
+  }
+
   return pool;
 }
 

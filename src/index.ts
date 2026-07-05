@@ -88,7 +88,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 client.on(Events.MessageCreate, (message) => {
-  void handleMessageCreate(message);
+  void handleMessageCreate(message).catch((error) => {
+    console.error("Message handler failed:", error);
+  });
 });
 
 client.on(Events.Raw, (packet) => {
@@ -96,32 +98,38 @@ client.on(Events.Raw, (packet) => {
 });
 
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
-  void handleTempVoice(oldState, newState);
+  void handleTempVoice(oldState, newState).catch((error) => {
+    console.error("Temporary voice handler failed:", error);
+  });
 });
 
 client.on(Events.GuildMemberAdd, async (member) => {
-  const config = await getGuildConfig(member.guild.id);
+  try {
+    const config = await getGuildConfig(member.guild.id);
 
-  if (config.autoRoleId) {
-    await member.roles.add(config.autoRoleId, "Automatic join role").catch(() => null);
+    if (config.autoRoleId) {
+      await member.roles.add(config.autoRoleId, "Automatic join role").catch(() => null);
+    }
+
+    if (!config.welcomeChannelId) return;
+
+    const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+    if (!channel?.isTextBased() || channel.isDMBased()) return;
+
+    await channel.send({
+      embeds: [
+        panelEmbed(
+          "Welcome",
+          "ARRIVAL",
+          renderWelcome(config.welcomeMessage, `${member}`, member.guild.name),
+          config.accentColor ?? palette.primary,
+          "Joined"
+        ).addFields({ name: "Member Count", value: `${member.guild.memberCount}`, inline: true })
+      ]
+    }).catch(() => null);
+  } catch (error) {
+    console.error("Guild member join handler failed:", error);
   }
-
-  if (!config.welcomeChannelId) return;
-
-  const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
-  if (!channel?.isTextBased() || channel.isDMBased()) return;
-
-  await channel.send({
-    embeds: [
-      panelEmbed(
-        "Welcome",
-        "ARRIVAL",
-        renderWelcome(config.welcomeMessage, `${member}`, member.guild.name),
-        config.accentColor ?? palette.primary,
-        "Joined"
-      ).addFields({ name: "Member Count", value: `${member.guild.memberCount}`, inline: true })
-    ]
-  }).catch(() => null);
 });
 
 process.on("SIGINT", () => {
