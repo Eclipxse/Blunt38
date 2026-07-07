@@ -32,7 +32,12 @@ export const drawCommand: Command = {
       return;
     }
 
-    await interaction.deferReply();
+    try {
+      await interaction.deferReply();
+    } catch (error) {
+      console.error("Draw command failed before Discord acknowledged the interaction:", error);
+      return;
+    }
 
     try {
       const rounds = interaction.options.getInteger("rounds") ?? 3;

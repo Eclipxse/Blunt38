@@ -5,6 +5,7 @@ import {
   MessageFlags,
   type InteractionReplyOptions
 } from "discord.js";
+import dns from "node:dns";
 import { commandData, commandMap } from "./commands/index.js";
 import { renderWelcome } from "./commands/welcome.js";
 import { env } from "./env.js";
@@ -17,6 +18,8 @@ import { handleMusicRaw, initMusic } from "./services/music.js";
 import { getGuildConfig } from "./services/store.js";
 import { handleTempVoice } from "./services/temp-voice.js";
 import { palette, panelEmbed } from "./utils/ui.js";
+
+dns.setDefaultResultOrder("ipv4first");
 
 const intents = [
   GatewayIntentBits.Guilds,
