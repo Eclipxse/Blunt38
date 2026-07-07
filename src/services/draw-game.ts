@@ -7,12 +7,13 @@ import { env } from "../env.js";
 
 const DRAW_SECONDS = 80;
 const CHOOSE_SECONDS = 16;
+const REVEAL_SECONDS = 4;
 const ROUND_BREAK_SECONDS = 7;
 const ROOM_TTL_MS = 1000 * 60 * 60 * 3;
 
-type GamePhase = "lobby" | "choosing" | "drawing" | "roundEnd" | "finished";
+type GamePhase = "lobby" | "choosing" | "drawing" | "reveal" | "roundEnd" | "finished";
 
-type DrawTool = "brush" | "eraser";
+type DrawTool = "brush" | "eraser" | "fill";
 
 type DrawPoint = {
   x: number;
@@ -20,7 +21,7 @@ type DrawPoint = {
 };
 
 type DrawEvent = {
-  type: "begin" | "move" | "end";
+  type: "begin" | "move" | "end" | "fill";
   point?: DrawPoint;
   color?: string;
   size?: number;
@@ -42,6 +43,7 @@ type GameGuess = {
   playerName: string;
   text: string;
   correct: boolean;
+  points?: number;
   system?: boolean;
   createdAt: number;
 };
@@ -213,28 +215,24 @@ export function startDrawGameServer() {
       if (!guess) return;
 
       const correct = Boolean(room.word && normalizeGuess(guess) === normalizeGuess(room.word));
+      if (correct && player.guessed) return;
+
+      const alreadyGuessed = player.guessed;
+      const points = correct && !alreadyGuessed ? scoreCorrectGuess(room, player) : 0;
       const entry: GameGuess = {
         id: crypto.randomUUID(),
         playerName: player.name,
         text: correct ? "guessed the word" : guess,
         correct,
+        points: points || undefined,
         createdAt: Date.now()
       };
       room.guesses.push(entry);
 
-      if (correct && !player.guessed) {
-        player.guessed = true;
-        const remaining = room.deadline ? Math.max(0, room.deadline - Date.now()) : 0;
-        player.score += 140 + Math.ceil(remaining / 1000) * 5;
-
-        const drawer = room.drawerId ? room.players.get(room.drawerId) : undefined;
-        if (drawer) drawer.score += 45;
-      }
-
       emitState(io, room);
 
       if (activePlayers(room).filter((candidate) => candidate.id !== room.drawerId).every((candidate) => candidate.guessed)) {
-        endRound(io, room);
+        startReveal(io, room);
       }
     });
 
@@ -347,21 +345,31 @@ function startDrawing(io: Server, room: DrawRoom, word: string) {
   room.guesses = [];
   emitState(io, room);
 
-  room.timer = setTimeout(() => endRound(io, room), DRAW_SECONDS * 1000);
+  room.timer = setTimeout(() => startReveal(io, room), DRAW_SECONDS * 1000);
   room.timer.unref();
 }
 
-function endRound(io: Server, room: DrawRoom) {
+function startReveal(io: Server, room: DrawRoom) {
   if (room.phase !== "drawing" && room.phase !== "choosing") return;
   clearRoomTimer(room);
-  room.phase = room.round >= room.maxRounds ? "finished" : "roundEnd";
-  room.deadline = Date.now() + ROUND_BREAK_SECONDS * 1000;
+  room.phase = "reveal";
+  room.deadline = Date.now() + REVEAL_SECONDS * 1000;
+  addSystemGuess(room, room.word ? `The word was ${room.word}.` : "Round reveal.");
   emitState(io, room);
 
-  if (room.phase === "roundEnd") {
-    room.timer = setTimeout(() => startChoosing(io, room), ROUND_BREAK_SECONDS * 1000);
-    room.timer.unref();
-  }
+  room.timer = setTimeout(() => finishRound(io, room), REVEAL_SECONDS * 1000);
+  room.timer.unref();
+}
+
+function finishRound(io: Server, room: DrawRoom) {
+  clearRoomTimer(room);
+  room.phase = room.round >= room.maxRounds ? "finished" : "roundEnd";
+  room.deadline = room.phase === "roundEnd" ? Date.now() + ROUND_BREAK_SECONDS * 1000 : undefined;
+  emitState(io, room);
+
+  if (room.phase !== "roundEnd") return;
+  room.timer = setTimeout(() => startChoosing(io, room), ROUND_BREAK_SECONDS * 1000);
+  room.timer.unref();
 }
 
 function emitState(io: Server, room: DrawRoom) {
@@ -392,7 +400,7 @@ function buildState(room: DrawRoom, socketId: string): RoomState {
       isDrawer: player.id === room.drawerId
     })),
     guesses: room.guesses.slice(-32),
-    wordHint: room.word ? maskWord(room.word, isDrawer || room.phase === "roundEnd" || room.phase === "finished") : "",
+    wordHint: room.word ? maskWord(room.word, isDrawer || room.phase === "reveal" || room.phase === "roundEnd" || room.phase === "finished") : "",
     secretWord: isDrawer ? room.word : undefined,
     choices: isDrawer && room.phase === "choosing" ? room.choices : undefined,
     drawerId: room.drawerId,
@@ -419,6 +427,26 @@ function addSystemGuess(room: DrawRoom, text: string) {
     system: true,
     createdAt: Date.now()
   });
+}
+
+function scoreCorrectGuess(room: DrawRoom, player: GamePlayer) {
+  const guessers = activePlayers(room).filter((candidate) => candidate.id !== room.drawerId);
+  const guessedBefore = guessers.filter((candidate) => candidate.guessed).length;
+  const remaining = room.deadline ? Math.max(0, room.deadline - Date.now()) : 0;
+  const timeBonus = Math.ceil(remaining / 1000) * 6;
+  const placeBonus = Math.max(0, guessers.length - guessedBefore) * 25;
+  const points = 120 + timeBonus + placeBonus;
+
+  player.guessed = true;
+  player.score += points;
+
+  const drawer = room.drawerId ? room.players.get(room.drawerId) : undefined;
+  if (drawer) {
+    const drawerBonus = 35 + Math.max(0, 12 - guessedBefore * 3);
+    drawer.score += drawerBonus;
+  }
+
+  return points;
 }
 
 function createRoomCode() {
@@ -476,7 +504,7 @@ function normalizeGuess(value: string) {
 }
 
 function sanitizeDrawEvent(event: DrawEvent) {
-  if (!event || (event.type !== "begin" && event.type !== "move" && event.type !== "end")) return null;
+  if (!event || (event.type !== "begin" && event.type !== "move" && event.type !== "end" && event.type !== "fill")) return null;
 
   const clean: DrawEvent = { type: event.type };
   if (event.point) {
@@ -488,7 +516,7 @@ function sanitizeDrawEvent(event: DrawEvent) {
 
   if (event.color && /^#[0-9a-f]{6}$/i.test(event.color)) clean.color = event.color;
   if (typeof event.size === "number") clean.size = clampNumber(event.size, 2, 42);
-  if (event.tool === "eraser" || event.tool === "brush") clean.tool = event.tool;
+  if (event.tool === "eraser" || event.tool === "brush" || event.tool === "fill") clean.tool = event.tool;
 
   return clean;
 }

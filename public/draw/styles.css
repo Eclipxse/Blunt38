@@ -332,12 +332,26 @@ canvas {
   outline: 4px solid #ffffff;
 }
 
-.size-control {
+.size-control,
+.color-picker {
   min-width: 180px;
   display: grid;
   gap: 2px;
   font-family: "Space Grotesk", sans-serif;
   font-weight: 700;
+}
+
+.color-picker {
+  min-width: 86px;
+}
+
+.color-picker input {
+  width: 64px;
+  height: 34px;
+  padding: 0;
+  border: 3px solid var(--ink);
+  background: #ffffff;
+  box-shadow: 3px 3px 0 var(--ink);
 }
 
 .tool-btn {
@@ -352,6 +366,11 @@ canvas {
 
 .tool-btn.danger {
   background: var(--hot);
+  color: #ffffff;
+}
+
+.tool-btn.sound {
+  background: var(--violet);
   color: #ffffff;
 }
 
@@ -424,10 +443,20 @@ canvas {
 
 .guess.correct {
   background: var(--mint);
+  animation: correct-pop 420ms ease;
 }
 
 .guess.system {
   background: var(--cream);
+}
+
+.score-burst {
+  float: right;
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
+  background: var(--honey);
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 900;
 }
 
 .guess-text {
@@ -500,6 +529,23 @@ canvas {
 
 .hidden {
   display: none !important;
+}
+
+@keyframes correct-pop {
+  0% {
+    transform: scale(0.96) rotate(-1deg);
+    box-shadow: 1px 1px 0 var(--ink);
+  }
+
+  60% {
+    transform: scale(1.03) rotate(1deg);
+    box-shadow: 7px 7px 0 var(--ink);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    box-shadow: 3px 3px 0 var(--ink);
+  }
 }
 
 @media (max-width: 1180px) {
