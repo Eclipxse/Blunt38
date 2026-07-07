@@ -20,6 +20,11 @@ import { palette } from "../utils/ui.js";
 
 let manager: LavalinkManager | null = null;
 
+type MusicPanelTarget = {
+  channelId: string;
+  messageId: string;
+};
+
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink, wait until /v4/info responds, then restart the bot so it can attach to a usable node.";
 const spotifyUnavailableMessage =
@@ -98,10 +103,23 @@ export function initMusic(client: Client<true>) {
     const channel = player.textChannelId ? await client.channels.fetch(player.textChannelId).catch(() => null) : null;
     if (!channel?.isTextBased() || channel.isDMBased()) return;
 
-    await channel.send({
+    const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
+    if (panelTarget?.channelId === channel.id && "messages" in channel) {
+      const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+      if (panelMessage) {
+        await panelMessage.edit({
+          embeds: [nowPlayingEmbed(player, track)],
+          components: musicControlRows(player)
+        }).catch(() => null);
+        return;
+      }
+    }
+
+    const sent = await channel.send({
       embeds: [nowPlayingEmbed(player, track)],
       components: musicControlRows(player)
     }).catch(() => null);
+    if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
   });
 
   manager.on("queueEnd", async (player) => {
@@ -217,7 +235,19 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   const tracks = result.loadType === "playlist" ? result.tracks : [result.tracks[0]!];
   player.queue.add(tracks);
 
-  if (!player.playing && !player.paused) {
+  const startsPlayback = !player.playing && !player.paused;
+
+  if (startsPlayback) {
+    const first = tracks[0];
+    const loadingMessage = await interaction.editReply({
+      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
+      components: musicControlRows(player)
+    });
+
+    player.setData("musicPanelTarget", {
+      channelId: loadingMessage.channelId,
+      messageId: loadingMessage.id
+    });
     player.setData("musicRequestStartedAt", startedAt);
     await player.play().catch((error: unknown) => {
       explainLavalinkError(error);
@@ -229,7 +259,7 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
     + `connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
   );
 
-  return { player, result, added: tracks };
+  return { player, result, added: tracks, startsPlayback };
 }
 
 export function getRequesterName(track?: Track | UnresolvedTrack | null) {

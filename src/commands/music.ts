@@ -86,7 +86,9 @@ export const musicCommand: Command = {
 
       try {
         const query = interaction.options.getString("query", true);
-        const { player, result, added } = await playQuery(interaction, query);
+        const { player, result, added, startsPlayback } = await playQuery(interaction, query);
+        if (startsPlayback) return;
+
         const first = added[0];
         const description = result.loadType === "playlist"
           ? `Queued **${added.length}** tracks from **${result.playlist?.name ?? "playlist"}**.`
