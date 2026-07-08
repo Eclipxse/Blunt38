@@ -1,4 +1,6 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+
+dotenv.config({ override: true });
 
 const token = process.env.DISCORD_TOKEN?.trim();
 const aiProviderRaw = process.env.AI_PROVIDER?.trim().toLowerCase();
