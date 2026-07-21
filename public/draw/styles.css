@@ -1,15 +1,15 @@
 :root {
-  --ink: #24120d;
-  --paper: #fff4df;
-  --cream: #ffe7b7;
-  --pink: #ff8bb6;
-  --hot: #ff4e8a;
-  --sky: #62c7ff;
-  --mint: #8dffba;
-  --honey: #ffc83d;
-  --violet: #aa7cff;
-  --choco: #5a210f;
-  --panel: rgba(255, 246, 222, 0.92);
+  --ink: #211329;
+  --paper: #f8effa;
+  --cream: #e8d8ed;
+  --pink: #d8a9e3;
+  --hot: #bb52d6;
+  --sky: #63d8d2;
+  --mint: #b7ef72;
+  --honey: #ffd166;
+  --violet: #9566bd;
+  --choco: #442452;
+  --panel: rgba(248, 239, 250, 0.94);
   --shadow: 8px 8px 0 var(--ink);
   --small-shadow: 4px 4px 0 var(--ink);
 }
@@ -28,9 +28,9 @@ body {
   color: var(--ink);
   font-family: "Fredoka", system-ui, sans-serif;
   background:
-    radial-gradient(circle at 18% 18%, rgba(255, 139, 182, 0.48), transparent 22rem),
-    radial-gradient(circle at 86% 10%, rgba(98, 199, 255, 0.5), transparent 20rem),
-    linear-gradient(135deg, #6f2c17 0%, #ffd0df 46%, #ffc969 100%);
+    radial-gradient(circle at 18% 18%, rgba(197, 107, 223, 0.42), transparent 22rem),
+    radial-gradient(circle at 86% 10%, rgba(99, 216, 210, 0.42), transparent 20rem),
+    linear-gradient(135deg, #3b2448 0%, #d8c3e0 48%, #f4edf7 100%);
   overflow-x: hidden;
 }
 
@@ -40,8 +40,8 @@ body::before {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(90deg, rgba(36, 18, 13, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(36, 18, 13, 0.08) 1px, transparent 1px);
+    linear-gradient(90deg, rgba(33, 19, 41, 0.1) 1px, transparent 1px),
+    linear-gradient(rgba(33, 19, 41, 0.1) 1px, transparent 1px);
   background-size: 34px 34px;
   mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.72), transparent);
 }
@@ -82,7 +82,7 @@ button {
   grid-template-columns: auto 1fr auto auto;
   align-items: center;
   gap: 16px;
-  background: linear-gradient(90deg, var(--paper), #ffd2e2 55%, #aee6ff);
+  background: linear-gradient(90deg, var(--paper), #ddc7e6 55%, #a7e4df);
 }
 
 .brand-mark {

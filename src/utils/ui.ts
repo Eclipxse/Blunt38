@@ -8,13 +8,13 @@ import {
 import { env } from "../env.js";
 
 export const palette = {
-  primary: 0x2f6bff,
-  electric: 0x00d4ff,
-  violet: 0x8b5cf6,
+  primary: 0x6d3fa0,
+  electric: 0xc26cff,
+  violet: 0x8f63c7,
   success: 0x22c55e,
   warning: 0xf59e0b,
   danger: 0xef4444,
-  muted: 0x111827
+  muted: 0x21162d
 };
 
 export function embed(title: string, description?: string, color = palette.primary) {

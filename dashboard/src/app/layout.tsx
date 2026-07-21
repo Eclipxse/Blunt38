@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Browniezzz Dashboard",
-  description: "Premium Discord bot dashboard"
+  title: "blunt38 Dashboard",
+  description: "blunt38 premium Discord control center"
 };
 
 export default function RootLayout({

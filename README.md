@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="dashboard/public/brand/brownie-cloud.png" alt="Browniezzz banner" width="100%" />
+  <img src="dashboard/public/brand/blunt38-banner.jpg" alt="blunt38 banner" width="100%" />
 </p>
 
 <p align="center">
-  <img src="dashboard/public/brand/brownie-icon.png" alt="Browniezzz icon" width="96" />
+  <img src="dashboard/public/brand/blunt38-logo.jpg" alt="blunt38 logo" width="128" />
 </p>
 
-<h1 align="center">Browniezzz Discord Bot</h1>
+<h1 align="center">blunt38 Discord Bot</h1>
 
 <p align="center">
   A premium, UI-first Discord bot with moderation, welcome systems, AI replies, tickets, leveling, giveaways, music, a web dashboard, and live browser games.
@@ -22,12 +22,12 @@
 </p>
 
 <p align="center">
-  <img src="dashboard/public/brand/brownie-welcome.png" alt="Welcome to Brownie" width="100%" />
+  <img src="dashboard/public/brand/blunt38-banner.jpg" alt="38 reasons, none explained" width="100%" />
 </p>
 
-## What Is Browniezzz?
+## What Is blunt38?
 
-Browniezzz is a full-service Discord bot made for community servers that need more than a few basic commands. It includes setup panels, button-driven flows, configurable server systems, AI replies, and Lavalink-powered music playback.
+blunt38 is a full-service Discord bot made for community servers that need more than a few basic commands. It includes setup panels, button-driven flows, configurable server systems, AI replies, Lavalink-powered music playback, and a real-time browser drawing game.
 
 The project also ships with a separate web dashboard in `dashboard/`, so server admins can configure the bot from a browser instead of only using slash commands.
 
@@ -76,7 +76,7 @@ flowchart LR
   Dashboard --> OAuth["Discord OAuth"]
   Dashboard --> BotAPI["Discord Bot API"]
   Dashboard --> DB["Supabase Postgres"]
-  Discord --> Bot["Browniezzz Bot"]
+  Discord --> Bot["blunt38 Bot"]
   Bot --> DB
   Bot --> AI["Groq / OpenRouter / OpenAI"]
   Bot --> Lava["Lavalink"]
@@ -95,7 +95,7 @@ flowchart LR
 │   ├── services/                # Store, AI, music, giveaways, messages
 │   └── utils/                   # Shared helpers
 ├── dashboard/                   # Next.js web dashboard
-│   ├── public/brand/            # Browniezzz images used by README and site
+│   ├── public/brand/            # blunt38 images used by README and site
 │   └── src/app/api/             # OAuth, session, guild config API routes
 ├── lavalink/                    # Lavalink config example and setup notes
 ├── supabase/migrations/         # Postgres schema
@@ -178,7 +178,7 @@ The bot stores guild config, mod cases, polls, role panels, giveaways, levels, b
 
 ## AI Setup
 
-Browniezzz supports multiple OpenAI-compatible providers.
+blunt38 supports multiple OpenAI-compatible providers.
 
 ### Groq
 
@@ -199,7 +199,7 @@ ENABLE_MESSAGE_CONTENT_INTENT=true
 AI_PROVIDER=openrouter
 OPENROUTER_API_KEY=your_openrouter_key
 OPENROUTER_MODEL=openrouter/free
-OPENROUTER_APP_NAME=Browniezzz
+OPENROUTER_APP_NAME=blunt38
 AI_MAX_TOKENS=140
 AI_TIMEOUT_MS=15000
 ENABLE_MESSAGE_CONTENT_INTENT=true
@@ -275,7 +275,7 @@ YouTube and YouTube Music search work through the Lavalink YouTube plugin. Spoti
 
 ## Draw Party Game
 
-Browniezzz includes a live Skribbl-style drawing game hosted by the bot process.
+blunt38 includes a live Skribbl-style drawing game hosted by the bot process.
 
 Bot env:
 
@@ -453,12 +453,11 @@ Your existing 4 GB RAM VPS is enough for the bot, dashboard, Lavalink, and a sma
 
 ## Brand Assets
 
-The Browniezzz assets used by the README and dashboard live here:
+The blunt38 assets used by the README, dashboard, and Draw Party live here:
 
 ```text
-dashboard/public/brand/brownie-cloud.png
-dashboard/public/brand/brownie-icon.png
-dashboard/public/brand/brownie-welcome.png
+dashboard/public/brand/blunt38-banner.jpg
+dashboard/public/brand/blunt38-logo.jpg
 ```
 
 These images are loaded by the website and rendered directly in this README.

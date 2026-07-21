@@ -290,7 +290,7 @@ function LoginScreen({ error }: { error: string | null }) {
         ? ["Ticket opened from modal", "Support role notified privately"]
         : active.key === "levels"
           ? ["Raven reached level 12", "Leaderboard updated in Supabase"]
-          : ["Raven asked for setup help", "Browniezzz replied in Gen Z mode"];
+          : ["Raven asked for setup help", "blunt38 replied in Gen Z mode"];
 
   useEffect(() => {
     const root = authRootRef.current;
@@ -412,10 +412,10 @@ function LoginScreen({ error }: { error: string | null }) {
         <header className="auth-topbar">
           <div className="auth-brand">
             <span className="auth-brand-mark">
-              <img src="/brand/brownie-icon.png" alt="" />
+              <img src="/brand/blunt38-logo.jpg" alt="" />
             </span>
             <span>
-              <strong>Browniezzz</strong>
+              <strong>blunt38</strong>
               <small>Discord operations dashboard</small>
             </span>
           </div>
@@ -428,8 +428,8 @@ function LoginScreen({ error }: { error: string | null }) {
 
         <div className="auth-grid">
           <aside className="auth-login-card">
-            <span className="auth-eyebrow">Browniezzz OS</span>
-            <h1>Browniezzz command center.</h1>
+            <span className="auth-eyebrow">blunt38 OS</span>
+            <h1>blunt38 command center.</h1>
             <p>
               Discord login, server-level access, live bot config, premium controls, and settings saved directly to Supabase.
             </p>
@@ -457,7 +457,7 @@ function LoginScreen({ error }: { error: string | null }) {
               </span>
             </div>
 
-            <img className="auth-wide-banner" src="/brand/brownie-welcome.png" alt="" />
+            <img className="auth-wide-banner" src="/brand/blunt38-banner.jpg" alt="" />
           </aside>
 
           <section className="auth-workbench">
@@ -499,7 +499,7 @@ function LoginScreen({ error }: { error: string | null }) {
                 </div>
 
                 <div className="console-command">
-                  <span>raven@browniezzz</span>
+                  <span>raven@blunt38</span>
                   <strong>{active.command}</strong>
                 </div>
 
@@ -515,7 +515,7 @@ function LoginScreen({ error }: { error: string | null }) {
                 <div className="console-discord-card">
                   <div className="discord-user-dot">B</div>
                   <div>
-                    <strong>Browniezzz</strong>
+                    <strong>blunt38</strong>
                     <p>{active.key === "music" ? "Now playing with queue buttons armed." : "Configuration saved and ready for this server."}</p>
                   </div>
                 </div>
@@ -524,7 +524,7 @@ function LoginScreen({ error }: { error: string | null }) {
               <div className="live-module-panel">
                 <div className="module-panel-head">
                   <span className="live-module-icon">
-                    {active.key === "ai" ? <img src="/brand/brownie-icon.png" alt="" /> : <ActiveIcon size={22} />}
+                    {active.key === "ai" ? <img src="/brand/blunt38-logo.jpg" alt="" /> : <ActiveIcon size={22} />}
                   </span>
                   <div>
                     <strong>{active.title}</strong>
@@ -600,7 +600,7 @@ function LoadingScreen() {
           <Loader2 size={22} className="spin" />
         </span>
         <div>
-          <strong>Browniezzz</strong>
+          <strong>blunt38</strong>
           <p className="muted">Syncing Discord and Supabase</p>
         </div>
       </div>
@@ -755,10 +755,10 @@ export function DashboardApp() {
           <div className="brand">
           <div className="brand-mark">
             <span className="brand-logo">
-              <img src="/brand/brownie-icon.png" alt="" />
+              <img src="/brand/blunt38-logo.jpg" alt="" />
             </span>
             <div>
-              <h1>Browniezzz</h1>
+              <h1>blunt38</h1>
                 <p>Premium bot dashboard</p>
               </div>
             </div>
@@ -1328,7 +1328,7 @@ function PreviewRail({
   return (
     <aside className="preview-stack">
       <section className="preview-panel brand-preview-panel">
-        <img className="brand-preview-image" src="/brand/brownie-welcome.png" alt="" />
+        <img className="brand-preview-image" src="/brand/blunt38-banner.jpg" alt="" />
       </section>
 
       <section className="preview-panel">
@@ -1337,7 +1337,7 @@ function PreviewRail({
           className="discord-preview"
           style={{ "--preview-accent": hexColor(config.accentColor) } as CSSProperties & Record<"--preview-accent", string>}
         >
-          <strong>Browniezzz</strong>
+          <strong>blunt38</strong>
           <p>{welcome || "Welcome @Raven to your server."}</p>
         </div>
       </section>

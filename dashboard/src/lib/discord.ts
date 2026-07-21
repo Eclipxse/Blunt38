@@ -43,7 +43,7 @@ async function discordFetch<T>(path: string, init: RequestInit = {}) {
     ...init,
     headers: {
       ...init.headers,
-      "User-Agent": "Browniezzz Dashboard"
+      "User-Agent": "blunt38 Dashboard"
     },
     cache: "no-store"
   });
@@ -71,7 +71,7 @@ export async function exchangeDiscordCode(code: string) {
     body,
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
-      "User-Agent": "Browniezzz Dashboard"
+      "User-Agent": "blunt38 Dashboard"
     },
     cache: "no-store"
   });

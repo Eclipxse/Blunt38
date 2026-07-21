@@ -12,7 +12,7 @@ import { palette, panelEmbed } from "../utils/ui.js";
 export const drawCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("draw")
-    .setDescription("Start a Brownie Draw Party room.")
+    .setDescription("Start a blunt38 Draw Party room.")
     .setDMPermission(false)
     .addSubcommand((subcommand) =>
       subcommand
@@ -49,9 +49,9 @@ export const drawCommand: Command = {
         .setURL(room.url)
     );
 
-    const content = `Brownie Draw Party room \`${room.code}\` is ready: ${room.url}`;
+    const content = `blunt38 Draw Party room \`${room.code}\` is ready: ${room.url}`;
     const embed = panelEmbed(
-      "Brownie Draw Party",
+      "blunt38 Draw Party",
       "LIVE GAME",
       `Room \`${room.code}\` is ready. Open the room, sketch the secret word, and guess faster than everyone else.`,
       palette.warning,

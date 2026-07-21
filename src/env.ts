@@ -42,7 +42,7 @@ export const env = {
   openRouterKey,
   openRouterModel: process.env.OPENROUTER_MODEL?.trim() || "openrouter/free",
   openRouterSiteUrl: process.env.OPENROUTER_SITE_URL?.trim(),
-  openRouterAppName: process.env.OPENROUTER_APP_NAME?.trim() || "Nexus Discord Bot",
+  openRouterAppName: process.env.OPENROUTER_APP_NAME?.trim() || "blunt38",
   groqKey,
   groqModel: process.env.GROQ_MODEL?.trim() || "llama-3.1-8b-instant",
   aiMaxTokens: Number.isFinite(aiMaxTokens) ? Math.max(60, Math.min(400, aiMaxTokens)) : 140,
@@ -58,6 +58,6 @@ export const env = {
   drawGamePublicUrl: process.env.DRAW_GAME_PUBLIC_URL?.trim() || `http://localhost:${Number.isFinite(drawGamePort) ? drawGamePort : 8787}`,
   storageDriver: storageDriverRaw === "postgres" ? "postgres" : "json",
   databaseUrl: process.env.DATABASE_URL?.trim(),
-  brandName: process.env.BOT_BRAND_NAME?.trim() || "Nexus",
+  brandName: process.env.BOT_BRAND_NAME?.trim() || "blunt38",
   voiceControlUserIds
 };

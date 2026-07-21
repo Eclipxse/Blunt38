@@ -94,7 +94,7 @@ type BuildContext = {
 const buildMarker = "browniezzz-builder:v1";
 
 const themeChoices: Array<{ name: string; value: ThemeKey }> = [
-  { name: "Brownie Premium", value: "brownie" },
+  { name: "blunt38 CRT", value: "brownie" },
   { name: "Gaming Arena", value: "gaming" },
   { name: "Soft Cute", value: "soft-cute" },
   { name: "Dark Luxury", value: "dark-luxury" }
@@ -174,11 +174,11 @@ function makeTemplate(theme: ThemeKey): ServerTemplate {
   const variants: Record<ThemeKey, Omit<ServerTemplate, "roles" | "categories">> = {
     brownie: {
       key: "brownie",
-      name: "Brownie Premium",
-      accent: 0xff6aa8,
-      description: "Cute neo-brutal community layout with cozy onboarding, AI chat, music, tickets, and staff systems.",
+      name: "blunt38 CRT",
+      accent: 0x8f63c7,
+      description: "Purple CRT community layout with polished onboarding, AI chat, music, tickets, and staff systems.",
       welcomeMessage: "Welcome {user} to {server}. Grab roles, read the map, then jump into main-chat.",
-      aiPrompt: "Act like Browniezzz server's cute Gen Z community assistant. Be warm, quick, playful, and useful."
+      aiPrompt: "Act like blunt38's sharp Gen Z community assistant. Be warm, quick, playful, and useful."
     },
     gaming: {
       key: "gaming",
@@ -208,8 +208,8 @@ function makeTemplate(theme: ThemeKey): ServerTemplate {
 
   const categoryNames: Record<ThemeKey, Record<CategoryKey, string>> = {
     brownie: {
-      gate: "BROWNIEZZZ GATE",
-      lounge: "COZY LOUNGE",
+      gate: "BLUNT38 GATE",
+      lounge: "SIGNAL LOUNGE",
       events: "EVENTS AND XP",
       music: "MUSIC DECK",
       voice: "VOICE LOUNGE",
@@ -597,7 +597,7 @@ async function build(interaction: Parameters<Command["execute"]>[0]) {
 
     await interaction.editReply({
       embeds: [
-        embed("Server Build Complete", "Premium server layout created and Browniezzz systems wired.", template.accent).addFields(
+        embed("Server Build Complete", "Premium server layout created and blunt38 systems wired.", template.accent).addFields(
           { name: "Theme", value: `\`${template.name}\``, inline: true },
           { name: "Created Channels", value: `\`${context.createdChannelKeys.size}\``, inline: true },
           { name: "Configured", value: "`welcome` `logs` `tickets` `AI` `temp VC` `leveling`", inline: false }
