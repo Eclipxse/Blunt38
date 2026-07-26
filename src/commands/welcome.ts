@@ -1,14 +1,7 @@
 import { ChannelType, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
 import { getGuildConfig, updateGuildConfig } from "../services/store.js";
+import { buildWelcomeMessage } from "../services/welcome.js";
 import type { Command } from "../types.js";
-import { palette, panelEmbed } from "../utils/ui.js";
-
-export function renderWelcome(template: string | undefined, userMention: string, serverName: string) {
-  const fallback = "Welcome {user} to **{server}**.";
-  return (template || fallback)
-    .replaceAll("{user}", userMention)
-    .replaceAll("{server}", serverName);
-}
 
 export const welcomeCommand: Command = {
   data: new SlashCommandBuilder()
@@ -66,17 +59,10 @@ export const welcomeCommand: Command = {
       return;
     }
 
-    await channel.send({
-      embeds: [
-        panelEmbed(
-          "Welcome",
-          "ARRIVAL",
-          renderWelcome(config.welcomeMessage, `${interaction.user}`, interaction.guild.name),
-          config.accentColor ?? palette.primary,
-          "Joined"
-        ).addFields({ name: "Member", value: `${interaction.user}`, inline: true })
-      ]
-    });
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+    await channel.send(
+      await buildWelcomeMessage(member, config.welcomeMessage, config.accentColor, true)
+    );
     await interaction.reply({ content: `Sent a test welcome in ${channel}.`, flags: MessageFlags.Ephemeral });
   }
 };

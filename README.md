@@ -53,11 +53,12 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 | Draw Party | Real-time browser drawing rooms with word choices, brush, fill, eraser, colors, sounds, guesses, rounds, and scoring |
 | Tickets | Modal intake, category routing, staff claims, locks, transcripts, and close confirmation |
 | Moderation | Warnings, timeouts, kicks, bans, stored cases, history, and voice disconnect controls |
-| Community | Welcome messages, autoroles, self-role menus, polls, suggestions, birthdays, and giveaways |
+| Community | Visual welcome cards, welcome messages, autoroles, self-role menus, polls, suggestions, birthdays, and giveaways |
 | Leveling | XP, rank cards, leaderboards, and configurable level-up announcements |
 | Voice | Join-to-create temporary channels with automatic empty-room cleanup |
 | Server builder | Preview, build, and clean complete server layouts with roles, categories, channels, panels, and bot wiring |
-| Dashboard | Discord OAuth, guild selection, live roles/channels, and Supabase-backed configuration saves |
+| Dashboard | Discord OAuth, guild selection, live roles/channels, Supabase-backed settings, and the visual Welcome Studio |
+| Welcome Studio | Drag, resize, layers, snapping, variables, typography, backgrounds, uploads, effects, presets, undo/redo, and versioned publishing |
 
 ## // command index
 
@@ -188,9 +189,23 @@ Apply:
 
 ```text
 supabase/migrations/001_discord_bot_core_schema.sql
+supabase/migrations/002_visual_studio_foundation.sql
 ```
 
-That database stores guild configuration, moderation cases, polls, role panels, giveaways, XP, birthdays, and temporary voice state. It remembers the lore so the process does not have to.
+Run the migrations in numeric order. The database stores guild configuration, moderation cases, polls, role panels, giveaways, XP, birthdays, temporary voice state, visual Studio documents, and immutable template versions. It remembers the lore so the process does not have to.
+
+## // visual studio
+
+Open the dashboard, choose a server, then enter **Welcome**. The Welcome Studio is the first editor running on the shared visual-document engine.
+
+- The 960x360 canvas is the source of truth for both dashboard preview and Discord output.
+- **Publish** stores a sanitized document and creates a new immutable version in Supabase.
+- `{user}`, `{mention}`, `{server}`, `{membercount}`, `{inviter}`, and `{created}` are replaced at render time.
+- Uploaded editor images are currently capped at 1.5 MB and stored in the template document. Supabase Storage is the intended next step for a reusable asset library.
+- On member join and `/welcome test`, the bot renders the active document with the real member avatar through `@napi-rs/canvas`.
+- If no visual template exists, the migration is missing, or rendering fails, blunt38 sends the existing embed welcome instead.
+
+The same document contract is ready for Goodbye, Tickets, Music, Rank, Level Up, Starboard, Birthday, Announcements, Logging, and Moderation Studios.
 
 ## // give it a brain
 
