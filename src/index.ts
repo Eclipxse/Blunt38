@@ -7,7 +7,6 @@ import {
 } from "discord.js";
 import dns from "node:dns";
 import { commandData, commandMap } from "./commands/index.js";
-import { renderWelcome } from "./commands/welcome.js";
 import { env } from "./env.js";
 import { handleInteraction } from "./interactions/index.js";
 import { startBirthdayScheduler } from "./services/birthdays.js";
@@ -17,7 +16,7 @@ import { handleMessageCreate } from "./services/messages.js";
 import { handleMusicRaw, initMusic } from "./services/music.js";
 import { getGuildConfig } from "./services/store.js";
 import { handleTempVoice } from "./services/temp-voice.js";
-import { palette, panelEmbed } from "./utils/ui.js";
+import { buildWelcomeMessage } from "./services/welcome.js";
 
 dns.setDefaultResultOrder("ipv4first");
 
@@ -121,17 +120,9 @@ client.on(Events.GuildMemberAdd, async (member) => {
     const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
     if (!channel?.isTextBased() || channel.isDMBased()) return;
 
-    await channel.send({
-      embeds: [
-        panelEmbed(
-          "Welcome",
-          "ARRIVAL",
-          renderWelcome(config.welcomeMessage, `${member}`, member.guild.name),
-          config.accentColor ?? palette.primary,
-          "Joined"
-        ).addFields({ name: "Member Count", value: `${member.guild.memberCount}`, inline: true })
-      ]
-    }).catch(() => null);
+    await channel
+      .send(await buildWelcomeMessage(member, config.welcomeMessage, config.accentColor))
+      .catch(() => null);
   } catch (error) {
     console.error("Guild member join handler failed:", error);
   }

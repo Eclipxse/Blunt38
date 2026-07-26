@@ -31,6 +31,8 @@ import gsap from "gsap";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { WelcomeStudio } from "@/components/welcome-studio";
+
 type Guild = {
   id: string;
   name: string;
@@ -853,7 +855,7 @@ export function DashboardApp() {
 
           {error ? <div className="notice">{error}</div> : null}
 
-          <div className="content-grid">
+          <div className={`content-grid ${tab === "welcome" ? "studio-mode" : ""}`}>
             <section className="module-stage">
               {configLoading || !config ? (
                 <section className="panel">
@@ -865,6 +867,8 @@ export function DashboardApp() {
               ) : (
                 <ModuleView
                   tab={tab}
+                  guildId={selectedGuildId}
+                  guildName={selectedGuild?.name ?? "your server"}
                   config={config}
                   channels={channels}
                   roles={roles}
@@ -873,7 +877,7 @@ export function DashboardApp() {
               )}
             </section>
 
-            {config ? (
+            {config && tab !== "welcome" ? (
               <PreviewRail
                 config={config}
                 channels={channels}
@@ -890,12 +894,16 @@ export function DashboardApp() {
 
 function ModuleView({
   tab,
+  guildId,
+  guildName,
   config,
   channels,
   roles,
   updateConfig
 }: {
   tab: TabKey;
+  guildId: string;
+  guildName: string;
   config: GuildConfig;
   channels: Channel[];
   roles: Role[];
@@ -986,6 +994,7 @@ function ModuleView({
             />
           </div>
         </section>
+
       </>
     );
   }
@@ -1044,6 +1053,7 @@ function ModuleView({
             </label>
           </div>
         </section>
+
       </>
     );
   }
@@ -1124,6 +1134,8 @@ function ModuleView({
             ))}
           </div>
         </section>
+
+        <WelcomeStudio guildId={guildId} guildName={guildName} />
       </>
     );
   }
