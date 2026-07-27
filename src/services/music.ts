@@ -5,7 +5,8 @@ import {
   Client,
   EmbedBuilder,
   type ChatInputCommandInteraction,
-  type GuildMember
+  type GuildMember,
+  type User
 } from "discord.js";
 import {
   LavalinkManager,
@@ -17,6 +18,7 @@ import {
 } from "lavalink-client";
 import { env } from "../env.js";
 import { palette } from "../utils/ui.js";
+import { buildVisualAttachment } from "./visual-message.js";
 
 let manager: LavalinkManager | null = null;
 
@@ -101,24 +103,52 @@ export function initMusic(client: Client<true>) {
     }
 
     const channel = player.textChannelId ? await client.channels.fetch(player.textChannelId).catch(() => null) : null;
-    if (!channel?.isTextBased() || channel.isDMBased()) return;
+    if (!channel?.isTextBased() || channel.isDMBased() || !track) return;
+    const guild = client.guilds.cache.get(player.guildId);
+    const requester = track.requester as User | undefined;
+    const visual =
+      guild && requester && typeof requester.displayAvatarURL === "function"
+        ? await buildVisualAttachment({
+            guildId: player.guildId,
+            studioType: "music",
+            user: requester,
+            variables: {
+              user: requester.username,
+              mention: `@${requester.username}`,
+              server: guild.name,
+              track: track.info.title,
+              artist: track.info.author ?? "Unknown",
+              duration: formatTrackDuration(track)
+            },
+            fileName: "now-playing"
+          }).catch((error) => {
+            console.error("Visual music render failed:", error);
+            return null;
+          })
+        : null;
+    const panelPayload = visual
+      ? {
+          content: `${trackLabel(track)}\nRequested by **${getRequesterName(track)}**`,
+          embeds: [],
+          files: [visual],
+          components: musicControlRows(player)
+        }
+      : {
+          content: undefined,
+          embeds: [nowPlayingEmbed(player, track)],
+          components: musicControlRows(player)
+        };
 
     const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
     if (panelTarget?.channelId === channel.id && "messages" in channel) {
       const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
       if (panelMessage) {
-        await panelMessage.edit({
-          embeds: [nowPlayingEmbed(player, track)],
-          components: musicControlRows(player)
-        }).catch(() => null);
+        await panelMessage.edit(panelPayload).catch(() => null);
         return;
       }
     }
 
-    const sent = await channel.send({
-      embeds: [nowPlayingEmbed(player, track)],
-      components: musicControlRows(player)
-    }).catch(() => null);
+    const sent = await channel.send(panelPayload).catch(() => null);
     if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
   });
 

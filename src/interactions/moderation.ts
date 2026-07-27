@@ -155,6 +155,17 @@ export async function handleModerationModal(interaction: ModalSubmitInteraction)
   await logToGuild(
     interaction.guild,
     "Moderation Action",
-    `${interaction.user} used **${modAction}** on <@${userId}>.\nReason: ${reason}`
+    `${interaction.user} used **${modAction}** on <@${userId}>.\nReason: ${reason}`,
+    {
+      studioType: "moderation",
+      user: member?.user ?? await interaction.client.users.fetch(userId).catch(() => interaction.user),
+      variables: {
+        user: member?.displayName ?? `<@${userId}>`,
+        moderator: interaction.user.username,
+        action: modAction.toUpperCase(),
+        reason,
+        created: new Date().toLocaleString("en-US")
+      }
+    }
   );
 }

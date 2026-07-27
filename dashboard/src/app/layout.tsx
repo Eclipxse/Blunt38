@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
-import { Bungee, Fredoka, Geist_Mono } from "next/font/google";
+import { DM_Sans, IBM_Plex_Mono, Silkscreen } from "next/font/google";
+import { MotionProvider } from "@/components/motion-provider";
 import "./globals.css";
 
-const display = Bungee({
+const display = Silkscreen({
   variable: "--font-display",
-  weight: "400",
+  weight: ["400", "700"],
   subsets: ["latin"]
 });
 
-const round = Fredoka({
+const round = DM_Sans({
   variable: "--font-round",
   subsets: ["latin"]
 });
 
-const geistMono = Geist_Mono({
+const geistMono = IBM_Plex_Mono({
   variable: "--font-geist-mono",
+  weight: ["400", "500", "600"],
   subsets: ["latin"]
 });
 
@@ -30,7 +32,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${display.variable} ${round.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <MotionProvider>{children}</MotionProvider>
+      </body>
     </html>
   );
 }

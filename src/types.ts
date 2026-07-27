@@ -25,6 +25,8 @@ export type GuildConfig = {
   lastBirthdayRun?: string;
   levelingEnabled?: boolean;
   levelUpChannelId?: string;
+  starboardChannelId?: string;
+  starboardThreshold?: number;
   aiResponderEnabled?: boolean;
   aiResponderChannelId?: string;
   aiResponderPrompt?: string;

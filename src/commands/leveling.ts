@@ -3,6 +3,7 @@ import { getLevelRecord, listTopLevels, updateGuildConfig } from "../services/st
 import type { Command } from "../types.js";
 import { embed, palette } from "../utils/ui.js";
 import { xpForNextLevel } from "../utils/levels.js";
+import { buildVisualAttachment } from "../services/visual-message.js";
 
 export const levelingCommand: Command = {
   data: new SlashCommandBuilder()
@@ -54,13 +55,44 @@ export const rankCommand: Command = {
     .addUserOption((option) => option.setName("user").setDescription("Member to check.")),
   async execute(interaction) {
     if (!interaction.guildId) return;
+    await interaction.deferReply();
 
     const user = interaction.options.getUser("user") ?? interaction.user;
     const record = await getLevelRecord(interaction.guildId, user.id);
     const xp = record?.xp ?? 0;
     const level = record?.level ?? 0;
+    const top = await listTopLevels(interaction.guildId, 100);
+    const rankIndex = top.findIndex((entry) => entry.userId === user.id);
+    const attachment = interaction.guild
+      ? await buildVisualAttachment({
+          guildId: interaction.guildId,
+          studioType: "rank",
+          user,
+          variables: {
+            user: interaction.guild.members.cache.get(user.id)?.displayName ?? user.username,
+            mention: `@${user.username}`,
+            server: interaction.guild.name,
+            level,
+            xp,
+            nextxp: xpForNextLevel(level),
+            rank: rankIndex >= 0 ? `#${rankIndex + 1}` : "--"
+          },
+          fileName: "rank"
+        }).catch((error) => {
+          console.error("Visual rank render failed:", error);
+          return null;
+        })
+      : null;
 
-    await interaction.reply({
+    if (attachment) {
+      await interaction.editReply({
+        content: `${user} is level **${level}** with **${xp} XP**.`,
+        files: [attachment]
+      });
+      return;
+    }
+
+    await interaction.editReply({
       embeds: [
         embed("Rank", `${user} is level **${level}** with **${xp} XP**.`, palette.primary)
           .addFields({ name: "Next Level", value: `${xpForNextLevel(level)} XP`, inline: true })

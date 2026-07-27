@@ -15,6 +15,7 @@ import {
   LogOut,
   MessagesSquare,
   Music2,
+  Palette,
   Radio,
   RefreshCw,
   Save,
@@ -27,11 +28,11 @@ import {
   Ticket,
   Wand2,
 } from "lucide-react";
-import gsap from "gsap";
+import { animate, stagger } from "animejs";
 import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { WelcomeStudio } from "@/components/welcome-studio";
+import { StudioHub } from "@/components/studio-hub";
 
 type Guild = {
   id: string;
@@ -92,7 +93,7 @@ type GuildPayload = {
   roles: Role[];
 };
 
-type TabKey = "overview" | "ai" | "welcome" | "support" | "levels" | "music";
+type TabKey = "overview" | "ai" | "welcome" | "support" | "levels" | "music" | "studios";
 
 const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
   { key: "overview", label: "Overview", icon: Gauge },
@@ -100,7 +101,8 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
   { key: "welcome", label: "Welcome", icon: Sparkles },
   { key: "support", label: "Support", icon: Ticket },
   { key: "levels", label: "Levels", icon: Crown },
-  { key: "music", label: "Music", icon: Music2 }
+  { key: "music", label: "Music", icon: Music2 },
+  { key: "studios", label: "Studios", icon: Palette }
 ];
 
 const colorOptions = [
@@ -298,54 +300,44 @@ function LoginScreen({ error }: { error: string | null }) {
     const root = authRootRef.current;
     if (!root) return;
 
-    const hoverTargets: HTMLElement[] = [];
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const entranceTargets = root.querySelectorAll<HTMLElement>(
+      ".auth-topbar, .auth-login-card > *, .workbench-hero, .module-switch, .command-console, .live-module-panel, .auth-dock"
+    );
+    const meterTargets = root.querySelectorAll<HTMLElement>(".dock-meter span");
+    const hoverTargets = root.querySelectorAll<HTMLElement>(
+      ".auth-connect-button, .module-switch, .dock-control, .auth-proof-grid span"
+    );
+    const workbenchHero = root.querySelector<HTMLElement>(".workbench-hero");
+    const wideBanner = root.querySelector<HTMLElement>(".auth-wide-banner");
+    const previewDeck = root.querySelector<HTMLElement>(".preview-deck");
     const removeListeners: Array<() => void> = [];
 
-    const ctx = gsap.context(() => {
-      gsap.set(
-        [
-          ".auth-frame",
-          ".auth-login-card > *",
-          ".workbench-hero",
-          ".module-switch",
-          ".command-console",
-          ".live-module-panel",
-          ".auth-dock"
-        ],
-        { willChange: "transform, opacity" }
-      );
+    const entrance = animate(entranceTargets, {
+      opacity: [0, 1],
+      y: [18, 0],
+      scale: [0.985, 1],
+      delay: stagger(48),
+      duration: 680,
+      ease: "outExpo"
+    });
 
-      const timeline = gsap.timeline({ defaults: { ease: "power3.out" } });
-
-      timeline
-        .from(".auth-frame", { opacity: 0, y: 26, scale: 0.985, duration: 0.72 })
-        .from(".auth-brand-mark", { opacity: 0, y: -10, rotate: -7, scale: 0.8, duration: 0.42 }, "-=0.36")
-        .from(".auth-login-card > *", { opacity: 0, x: -22, stagger: 0.055, duration: 0.48 }, "-=0.26")
-        .from(".workbench-hero", { opacity: 0, y: -18, rotate: -0.7, duration: 0.55 }, "-=0.38")
-        .from(".module-switch", { opacity: 0, y: 18, stagger: 0.045, duration: 0.38 }, "-=0.22")
-        .from([".command-console", ".live-module-panel", ".auth-dock"], { opacity: 0, y: 24, stagger: 0.075, duration: 0.52 }, "-=0.2");
-
-      hoverTargets.push(
-        ...gsap.utils.toArray<HTMLElement>(".auth-connect-button, .module-switch, .dock-control, .auth-proof-grid span")
-      );
-
-      gsap.to(".dock-meter span", {
-        scaleY: 1.7,
-        transformOrigin: "bottom",
-        duration: 0.55,
-        repeat: -1,
-        yoyo: true,
-        stagger: { each: 0.08, from: "center" },
-        ease: "sine.inOut"
-      });
-    }, root);
+    const meter = animate(meterTargets, {
+      scaleY: [0.55, 1.65],
+      delay: stagger(85, { from: "center" }),
+      duration: 620,
+      alternate: true,
+      loop: true,
+      ease: "inOutSine"
+    });
 
     hoverTargets.forEach((target) => {
       const onEnter = () => {
-        gsap.to(target, { y: -4, x: -4, scale: 1.015, duration: 0.18, ease: "power2.out" });
+        animate(target, { y: -3, x: -3, scale: 1.012, duration: 220, ease: "outQuad" });
       };
       const onLeave = () => {
-        gsap.to(target, { y: 0, x: 0, scale: 1, duration: 0.42, ease: "elastic.out(1, 0.55)" });
+        animate(target, { y: 0, x: 0, scale: 1, duration: 520, ease: "outElastic(1, .55)" });
       };
 
       target.addEventListener("mouseenter", onEnter);
@@ -362,10 +354,32 @@ function LoginScreen({ error }: { error: string | null }) {
       const x = (event.clientX - bounds.left) / bounds.width - 0.5;
       const y = (event.clientY - bounds.top) / bounds.height - 0.5;
 
-      gsap.to(".workbench-hero", { x: x * 9, y: y * 5, rotate: x * 0.4, duration: 0.65, ease: "power3.out" });
-      gsap.to(".auth-wide-banner", { x: x * -9, y: y * -4, rotate: x * -0.3, duration: 0.75, ease: "power3.out" });
-      gsap.to(".preview-deck", { x: x * 7, y: y * 4, duration: 0.68, ease: "power3.out" });
-      gsap.to(".auth-brand-mark", { x: x * 5, y: y * 4, rotate: x * 5, duration: 0.7, ease: "power3.out" });
+      if (workbenchHero) {
+        animate(workbenchHero, {
+          x: x * 8,
+          y: y * 5,
+          rotate: x * 0.35,
+          duration: 720,
+          ease: "outExpo"
+        });
+      }
+      if (wideBanner) {
+        animate(wideBanner, {
+          x: x * -8,
+          y: y * -4,
+          rotate: x * -0.24,
+          duration: 820,
+          ease: "outExpo"
+        });
+      }
+      if (previewDeck) {
+        animate(previewDeck, {
+          x: x * 6,
+          y: y * 4,
+          duration: 760,
+          ease: "outExpo"
+        });
+      }
     };
 
     root.addEventListener("pointermove", onPointerMove);
@@ -373,35 +387,39 @@ function LoginScreen({ error }: { error: string | null }) {
     return () => {
       root.removeEventListener("pointermove", onPointerMove);
       removeListeners.forEach((remove) => remove());
-      ctx.revert();
+      entrance.revert();
+      meter.revert();
     };
   }, []);
 
   useEffect(() => {
     const root = authRootRef.current;
     if (!root) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const ctx = gsap.context(() => {
-      gsap.fromTo(
-        [".workbench-hero", ".command-console", ".live-module-panel"],
-        { y: 12, rotate: -0.35, scale: 0.992 },
-        { y: 0, rotate: 0, scale: 1, duration: 0.36, ease: "back.out(1.45)" }
-      );
+    const surfaceAnimation = animate(
+      root.querySelectorAll<HTMLElement>(".workbench-hero, .command-console, .live-module-panel"),
+      {
+        opacity: [0.72, 1],
+        y: [12, 0],
+        scale: [0.992, 1],
+        delay: stagger(55),
+        duration: 430,
+        ease: "outBack"
+      }
+    );
+    const lineAnimation = animate(root.querySelectorAll<HTMLElement>(".event-line, .preview-chat-line"), {
+      opacity: [0, 1],
+      x: [-10, 0],
+      delay: stagger(42),
+      duration: 340,
+      ease: "outQuad"
+    });
 
-      gsap.fromTo(
-        ".event-line",
-        { opacity: 0, x: -12 },
-        { opacity: 1, x: 0, stagger: 0.04, duration: 0.28, ease: "power2.out" }
-      );
-
-      gsap.fromTo(
-        ".preview-chat-line",
-        { opacity: 0, x: 14 },
-        { opacity: 1, x: 0, stagger: 0.05, duration: 0.3, ease: "power2.out" }
-      );
-    }, root);
-
-    return () => ctx.revert();
+    return () => {
+      surfaceAnimation.revert();
+      lineAnimation.revert();
+    };
   }, [activeKey]);
 
   return (
@@ -611,6 +629,7 @@ function LoadingScreen() {
 }
 
 export function DashboardApp() {
+  const dashboardRootRef = useRef<HTMLElement | null>(null);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedGuildId, setSelectedGuildId] = useState<string>("");
   const [payload, setPayload] = useState<GuildPayload | null>(null);
@@ -721,6 +740,49 @@ export function DashboardApp() {
     window.location.href = "/";
   }
 
+  useEffect(() => {
+    const root = dashboardRootRef.current;
+    if (!root || !me || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const shellAnimation = animate(
+      root.querySelectorAll<HTMLElement>(".sidebar > *, .topbar, .system-ticker"),
+      {
+        opacity: [0, 1],
+        x: [-12, 0],
+        delay: stagger(48),
+        duration: 620,
+        ease: "outExpo"
+      }
+    );
+
+    return () => {
+      shellAnimation.revert();
+    };
+  }, [me]);
+
+  useEffect(() => {
+    const root = dashboardRootRef.current;
+    if (!root || configLoading || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      animate(
+        root.querySelectorAll<HTMLElement>(
+          ".module-stage > .panel, .module-stage > .studio-hub, .preview-stack > .preview-panel"
+        ),
+        {
+          opacity: [0, 1],
+          y: [14, 0],
+          scale: [0.992, 1],
+          delay: stagger(55),
+          duration: 540,
+          ease: "outExpo"
+        }
+      );
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [configLoading, selectedGuildId, tab]);
+
   if (loading) return <LoadingScreen />;
   if (!me) {
     const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
@@ -751,22 +813,27 @@ export function DashboardApp() {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" ref={dashboardRootRef}>
       <div className="dashboard-grid">
         <aside className="sidebar">
           <div className="brand">
-          <div className="brand-mark">
-            <span className="brand-logo">
-              <img src="/brand/blunt38-logo.jpg" alt="" />
-            </span>
-            <div>
-              <h1>blunt38</h1>
+            <div className="brand-mark">
+              <span className="brand-logo">
+                <img src="/brand/blunt38-logo.jpg" alt="" />
+              </span>
+              <div>
+                <h1>blunt38</h1>
                 <p>Premium bot dashboard</p>
               </div>
             </div>
+            <div className="sidebar-signal">
+              <img src="/brand/kitty-is-not-okay.jpg" alt="" />
+              <span>SYS.038</span>
+              <small>online / probably</small>
+            </div>
           </div>
 
-          <div className="server-strip">
+          <div className="server-strip" data-native-scroll>
             {me.guilds.map((guild) => (
               <button
                 className={`server-button ${guild.id === selectedGuildId ? "active" : ""}`}
@@ -788,7 +855,7 @@ export function DashboardApp() {
             ))}
           </div>
 
-          <nav className="nav">
+          <nav className="nav" data-native-scroll>
             {tabs.map((item) => {
               const Icon = item.icon;
               return (
@@ -823,6 +890,7 @@ export function DashboardApp() {
         <section className="main">
           <header className="topbar">
             <div className="top-title">
+              <span className="top-signal">CONTROL FILE / {selectedGuildId.slice(-4)}</span>
               <h2>{selectedGuild?.name ?? "Server"}</h2>
               <p>
                 {dirty ? "Unsaved changes" : "Synced"} 
@@ -853,9 +921,22 @@ export function DashboardApp() {
             </div>
           </header>
 
+          <div className="system-ticker" aria-label="Live system status">
+            <div className="system-ticker-track">
+              <span><i /> bot gateway online</span>
+              <span>supabase synced</span>
+              <span>lavalink ready</span>
+              <span>11 visual studios</span>
+              <span><i /> bot gateway online</span>
+              <span>supabase synced</span>
+              <span>lavalink ready</span>
+              <span>11 visual studios</span>
+            </div>
+          </div>
+
           {error ? <div className="notice">{error}</div> : null}
 
-          <div className={`content-grid ${tab === "welcome" ? "studio-mode" : ""}`}>
+          <div className={`content-grid ${tab === "studios" ? "studio-mode" : ""}`}>
             <section className="module-stage">
               {configLoading || !config ? (
                 <section className="panel">
@@ -877,7 +958,7 @@ export function DashboardApp() {
               )}
             </section>
 
-            {config && tab !== "welcome" ? (
+            {config && tab !== "studios" ? (
               <PreviewRail
                 config={config}
                 channels={channels}
@@ -1135,9 +1216,12 @@ function ModuleView({
           </div>
         </section>
 
-        <WelcomeStudio guildId={guildId} guildName={guildName} />
       </>
     );
+  }
+
+  if (tab === "studios") {
+    return <StudioHub guildId={guildId} guildName={guildName} />;
   }
 
   if (tab === "support") {

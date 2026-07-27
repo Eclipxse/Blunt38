@@ -3,6 +3,7 @@ import {
   Events,
   GatewayIntentBits,
   MessageFlags,
+  Partials,
   type InteractionReplyOptions
 } from "discord.js";
 import dns from "node:dns";
@@ -14,8 +15,10 @@ import { startDrawGameServer, stopDrawGameServer } from "./services/draw-game.js
 import { startGiveawayScheduler } from "./services/giveaways.js";
 import { handleMessageCreate } from "./services/messages.js";
 import { handleMusicRaw, initMusic } from "./services/music.js";
+import { handleStarboardReaction } from "./services/starboard.js";
 import { getGuildConfig } from "./services/store.js";
 import { handleTempVoice } from "./services/temp-voice.js";
+import { buildVisualAttachment } from "./services/visual-message.js";
 import { buildWelcomeMessage } from "./services/welcome.js";
 
 dns.setDefaultResultOrder("ipv4first");
@@ -25,6 +28,7 @@ const intents = [
   GatewayIntentBits.GuildMembers,
   GatewayIntentBits.GuildModeration,
   GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.GuildMessageReactions,
   GatewayIntentBits.GuildVoiceStates
 ];
 
@@ -33,7 +37,8 @@ if (env.enableMessageContentIntent) {
 }
 
 const client = new Client({
-  intents
+  intents,
+  partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
 
 async function registerCommandsOnStart(readyClient: Client<true>) {
@@ -125,6 +130,48 @@ client.on(Events.GuildMemberAdd, async (member) => {
       .catch(() => null);
   } catch (error) {
     console.error("Guild member join handler failed:", error);
+  }
+});
+
+client.on(Events.MessageReactionAdd, (reaction, user) => {
+  void handleStarboardReaction(reaction, user).catch((error) => {
+    console.error("Starboard reaction handler failed:", error);
+  });
+});
+
+client.on(Events.GuildMemberRemove, async (member) => {
+  try {
+    const config = await getGuildConfig(member.guild.id);
+    if (!config.welcomeChannelId) return;
+
+    const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+    if (!channel?.isTextBased() || channel.isDMBased()) return;
+
+    const attachment = await buildVisualAttachment({
+      guildId: member.guild.id,
+      studioType: "goodbye",
+      user: member.user,
+      variables: {
+        user: member.displayName,
+        mention: `@${member.user.username}`,
+        server: member.guild.name,
+        membercount: member.guild.memberCount.toLocaleString("en-US"),
+        count: member.guild.memberCount.toLocaleString("en-US")
+      },
+      fileName: "goodbye"
+    }).catch((error) => {
+      console.error("Visual goodbye render failed:", error);
+      return null;
+    });
+
+    if (attachment) {
+      await channel.send({
+        content: `**${member.displayName}** left **${member.guild.name}**.`,
+        files: [attachment]
+      }).catch(() => null);
+    }
+  } catch (error) {
+    console.error("Guild member remove handler failed:", error);
   }
 });
 

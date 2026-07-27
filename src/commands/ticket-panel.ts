@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import type { Command } from "../types.js";
 import { panelEmbed, palette } from "../utils/ui.js";
+import { buildVisualAttachment } from "../services/visual-message.js";
 
 export const ticketPanelCommand: Command = {
   data: new SlashCommandBuilder()
@@ -44,6 +45,7 @@ export const ticketPanelCommand: Command = {
       await interaction.reply({ content: "Pick a normal text channel.", flags: MessageFlags.Ephemeral });
       return;
     }
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const title = interaction.options.getString("title") ?? "Support Tickets";
     const description =
@@ -54,16 +56,45 @@ export const ticketPanelCommand: Command = {
       new ButtonBuilder().setCustomId("ticket:open").setEmoji("💌").setLabel("Open Ticket").setStyle(ButtonStyle.Primary)
     );
 
-    await target.send({
-      embeds: [
-        panelEmbed(title, "SUPPORT PORTAL", description, palette.electric).addFields(
-          { name: "Flow", value: "`Open` -> `Choose Type` -> `Submit Details`", inline: false },
-          { name: "Staff Tools", value: "`Claim` `Lock` `Transcript` `Close`", inline: false }
-        )
-      ],
-      components: [row]
-    });
+    const visual = interaction.guild
+      ? await buildVisualAttachment({
+          guildId: interaction.guild.id,
+          studioType: "ticket",
+          user: interaction.user,
+          variables: {
+            user: interaction.member && "displayName" in interaction.member
+              ? interaction.member.displayName
+              : interaction.user.username,
+            mention: `@${interaction.user.username}`,
+            server: interaction.guild.name,
+            ticket: "NEW",
+            staff: "Support Team"
+          },
+          fileName: "ticket-panel"
+        }).catch((error) => {
+          console.error("Visual ticket render failed:", error);
+          return null;
+        })
+      : null;
 
-    await interaction.reply({ content: `Ticket panel posted in ${target}.`, flags: MessageFlags.Ephemeral });
+    await target.send(
+      visual
+        ? {
+            content: `**${title}**\n${description}`,
+            files: [visual],
+            components: [row]
+          }
+        : {
+            embeds: [
+              panelEmbed(title, "SUPPORT PORTAL", description, palette.electric).addFields(
+                { name: "Flow", value: "`Open` -> `Choose Type` -> `Submit Details`", inline: false },
+                { name: "Staff Tools", value: "`Claim` `Lock` `Transcript` `Close`", inline: false }
+              )
+            ],
+            components: [row]
+          }
+    );
+
+    await interaction.editReply({ content: `Ticket panel posted in ${target}.` });
   }
 };

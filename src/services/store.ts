@@ -16,6 +16,7 @@ import { postgresEnabled, query } from "./db.js";
 
 const dataDir = path.join(process.cwd(), "data");
 const storePath = path.join(dataDir, "store.json");
+const localStarboardPosts = new Set<string>();
 
 type DbDate = Date | string;
 
@@ -34,6 +35,8 @@ type GuildConfigRow = {
   last_birthday_run: string | null;
   leveling_enabled: boolean;
   level_up_channel_id: string | null;
+  starboard_channel_id: string | null;
+  starboard_threshold: number | null;
   ai_responder_enabled: boolean;
   ai_responder_channel_id: string | null;
   ai_responder_prompt: string | null;
@@ -126,6 +129,8 @@ function toGuildConfig(row: GuildConfigRow): GuildConfig {
     lastBirthdayRun: row.last_birthday_run ?? undefined,
     levelingEnabled: row.leveling_enabled,
     levelUpChannelId: row.level_up_channel_id ?? undefined,
+    starboardChannelId: row.starboard_channel_id ?? undefined,
+    starboardThreshold: row.starboard_threshold ?? 3,
     aiResponderEnabled: row.ai_responder_enabled,
     aiResponderChannelId: row.ai_responder_channel_id ?? undefined,
     aiResponderPrompt: row.ai_responder_prompt ?? undefined,
@@ -264,13 +269,13 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
       `insert into public.guild_configs (
         guild_id, welcome_channel_id, welcome_message, log_channel_id, ticket_category_id, support_role_id,
         verified_role_id, auto_role_id, temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id,
-        last_birthday_run, leveling_enabled, level_up_channel_id, ai_responder_enabled, ai_responder_channel_id,
-        ai_responder_prompt, ai_responder_persona, accent_color
+        last_birthday_run, leveling_enabled, level_up_channel_id, starboard_channel_id, starboard_threshold,
+        ai_responder_enabled, ai_responder_channel_id, ai_responder_prompt, ai_responder_persona, accent_color
       ) values (
         $1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11,
         $12, $13, $14, $15, $16,
-        $17, $18, $19
+        $17, $18, $19, $20, $21
       )
       on conflict (guild_id) do update set
         welcome_channel_id = excluded.welcome_channel_id,
@@ -286,6 +291,8 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         last_birthday_run = excluded.last_birthday_run,
         leveling_enabled = excluded.leveling_enabled,
         level_up_channel_id = excluded.level_up_channel_id,
+        starboard_channel_id = excluded.starboard_channel_id,
+        starboard_threshold = excluded.starboard_threshold,
         ai_responder_enabled = excluded.ai_responder_enabled,
         ai_responder_channel_id = excluded.ai_responder_channel_id,
         ai_responder_prompt = excluded.ai_responder_prompt,
@@ -306,6 +313,8 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         nullable(next.lastBirthdayRun),
         next.levelingEnabled ?? false,
         nullable(next.levelUpChannelId),
+        nullable(next.starboardChannelId),
+        Math.max(1, Math.min(25, next.starboardThreshold ?? 3)),
         next.aiResponderEnabled ?? false,
         nullable(next.aiResponderChannelId),
         nullable(next.aiResponderPrompt),
@@ -331,6 +340,40 @@ export async function getAllGuildConfigs() {
 
   const store = await readStore();
   return Object.values(store.guilds);
+}
+
+export async function hasStarboardPost(guildId: string, sourceMessageId: string) {
+  if (postgresEnabled()) {
+    const result = await query(
+      `select 1 from public.starboard_posts
+       where guild_id = $1 and source_message_id = $2
+       limit 1`,
+      [guildId, sourceMessageId]
+    );
+    return Boolean(result.rowCount);
+  }
+
+  return localStarboardPosts.has(`${guildId}:${sourceMessageId}`);
+}
+
+export async function saveStarboardPost(input: {
+  guildId: string;
+  sourceMessageId: string;
+  sourceChannelId: string;
+  starboardMessageId: string;
+}) {
+  if (postgresEnabled()) {
+    await query(
+      `insert into public.starboard_posts (
+         guild_id, source_message_id, source_channel_id, starboard_message_id
+       ) values ($1, $2, $3, $4)
+       on conflict (guild_id, source_message_id) do nothing`,
+      [input.guildId, input.sourceMessageId, input.sourceChannelId, input.starboardMessageId]
+    );
+    return;
+  }
+
+  localStarboardPosts.add(`${input.guildId}:${input.sourceMessageId}`);
 }
 
 export async function addModCase(input: Omit<ModCase, "id" | "createdAt">) {
