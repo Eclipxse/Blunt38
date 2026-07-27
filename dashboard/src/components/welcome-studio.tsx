@@ -38,11 +38,13 @@ import {
   createShapeElement,
   createTextElement,
   fontOptions,
+  getVisualPresets,
+  getVisualStudioDefinition,
   previewText,
   variableOptions,
-  welcomePresets,
   type VisualDocument,
   type VisualElement,
+  type VisualStudioType,
   type VisualTemplateEnvelope
 } from "@/lib/visual-document";
 
@@ -55,6 +57,15 @@ type Version = {
 type StudioResponse = {
   template: VisualTemplateEnvelope;
   versions: Version[];
+};
+
+type VisualAsset = {
+  id: string;
+  publicUrl: string;
+  fileName: string;
+  mimeType: string;
+  byteSize: number;
+  createdAt: string;
 };
 
 type PointerSession = {
@@ -128,15 +139,19 @@ function readImage(file: File) {
   });
 }
 
-export function WelcomeStudio({
+export function VisualStudio({
   guildId,
-  guildName
+  guildName,
+  studioType
 }: {
   guildId: string;
   guildName: string;
+  studioType: VisualStudioType;
 }) {
+  const studio = getVisualStudioDefinition(studioType);
+  const presets = useMemo(() => getVisualPresets(studioType), [studioType]);
   const [document, setDocument] = useState<VisualDocument>(() =>
-    createDefaultVisualDocument("welcome")
+    createDefaultVisualDocument(studioType)
   );
   const [history, setHistory] = useState<VisualDocument[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -147,6 +162,7 @@ export function WelcomeStudio({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [assets, setAssets] = useState<VisualAsset[]>([]);
   const [zoom, setZoom] = useState(0.72);
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -176,21 +192,29 @@ export function WelcomeStudio({
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/guilds/${guildId}/studios/welcome`, {
+      const response = await fetch(`/api/guilds/${guildId}/studios/${studioType}`, {
         cache: "no-store"
       });
-      if (!response.ok) throw new Error("Could not load Welcome Studio.");
+      if (!response.ok) throw new Error(`Could not load ${studio.label} Studio.`);
       const payload = (await response.json()) as StudioResponse;
       resetHistory(payload.template.document);
       setVersions(payload.versions);
       setPersistedVersion(payload.template.version);
+
+      const assetResponse = await fetch(`/api/guilds/${guildId}/assets`, {
+        cache: "no-store"
+      });
+      if (assetResponse.ok) {
+        const assetPayload = (await assetResponse.json()) as { assets: VisualAsset[] };
+        setAssets(assetPayload.assets);
+      }
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not load Welcome Studio.");
-      resetHistory(createDefaultVisualDocument("welcome"));
+      setMessage(error instanceof Error ? error.message : `Could not load ${studio.label} Studio.`);
+      resetHistory(createDefaultVisualDocument(studioType));
     } finally {
       setLoading(false);
     }
-  }, [guildId, resetHistory]);
+  }, [guildId, resetHistory, studio.label, studioType]);
 
   useEffect(() => {
     void loadStudio();
@@ -286,7 +310,7 @@ export function WelcomeStudio({
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/guilds/${guildId}/studios/welcome`, {
+      const response = await fetch(`/api/guilds/${guildId}/studios/${studioType}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document })
@@ -392,7 +416,7 @@ export function WelcomeStudio({
   async function uploadBackground(file: File | undefined) {
     if (!file) return;
     try {
-      const value = await readImage(file);
+      const value = await storeOrEmbed(file);
       commit((current) => ({
         ...current,
         background: { ...current.background, type: "image", value }
@@ -406,12 +430,34 @@ export function WelcomeStudio({
   async function uploadElement(file: File | undefined) {
     if (!file) return;
     try {
-      const src = await readImage(file);
+      const src = await storeOrEmbed(file);
       addElement(createImageElement(src, 350, 100));
       setMessage(null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upload failed.");
     }
+  }
+
+  async function storeOrEmbed(file: File) {
+    const form = new FormData();
+    form.set("file", file);
+    const response = await fetch(`/api/guilds/${guildId}/assets`, {
+      method: "POST",
+      body: form
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as { asset: VisualAsset };
+      setAssets((current) => [payload.asset, ...current.filter((item) => item.id !== payload.asset.id)]);
+      return payload.asset.publicUrl;
+    }
+
+    if (response.status === 503 || response.status === 404) {
+      return readImage(file);
+    }
+
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? "Upload failed.");
   }
 
   function applyPreset(preset: VisualDocument) {
@@ -424,7 +470,7 @@ export function WelcomeStudio({
     return (
       <section className="studio-loading">
         <Loader2 className="spin" size={22} />
-        <span>Opening Welcome Studio</span>
+        <span>Opening {studio.label} Studio</span>
       </section>
     );
   }
@@ -433,11 +479,11 @@ export function WelcomeStudio({
     <section className="visual-studio">
       <header className="studio-header">
         <div className="studio-title">
-          <span className="studio-kicker">WELCOME STUDIO</span>
+          <span className="studio-kicker">{studio.eyebrow}</span>
           <div>
             <h3>{document.name}</h3>
             <span>
-              {guildName} · {persistedVersion ? `v${persistedVersion}` : "draft"}
+              {guildName} / {studio.label} / {persistedVersion ? `v${persistedVersion}` : "draft"}
             </span>
           </div>
         </div>
@@ -480,7 +526,7 @@ export function WelcomeStudio({
 
       <div className="studio-preset-bar">
         <span>Presets</span>
-        {welcomePresets.map((preset) => (
+        {presets.map((preset) => (
           <button
             key={preset.name}
             type="button"
@@ -494,6 +540,23 @@ export function WelcomeStudio({
           {message ?? (dirty ? "Draft has unpublished changes" : "Saved to Studio")}
         </span>
       </div>
+
+      {assets.length ? (
+        <div className="studio-asset-strip">
+          <span>Asset library</span>
+          {assets.slice(0, 12).map((asset) => (
+            <button
+              key={asset.id}
+              type="button"
+              title={`Add ${asset.fileName}`}
+              onClick={() => addElement(createImageElement(asset.publicUrl, 350, 100))}
+            >
+              <img src={asset.publicUrl} alt="" />
+            </button>
+          ))}
+          <small>{assets.length} saved</small>
+        </div>
+      ) : null}
 
       <div className="studio-workspace">
         <aside className="studio-tools" aria-label="Add elements">
@@ -671,6 +734,7 @@ export function WelcomeStudio({
           {selected ? (
             <ElementInspector
               element={selected}
+              variables={studio.variables}
               onUpdate={(patch) => updateElement(selected.id, patch)}
               onDuplicate={duplicateSelected}
               onDelete={deleteSelected}
@@ -911,12 +975,14 @@ function ElementInspector({
   element,
   onUpdate,
   onDuplicate,
-  onDelete
+  onDelete,
+  variables
 }: {
   element: VisualElement;
   onUpdate: (patch: Partial<VisualElement>) => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  variables: readonly string[];
 }) {
   return (
     <>
@@ -974,7 +1040,7 @@ function ElementInspector({
             />
           </Control>
           <div className="variable-row">
-            {variableOptions.map((variable) => (
+            {variableOptions.filter((variable) => variables.includes(variable)).map((variable) => (
               <button
                 key={variable}
                 type="button"

@@ -1,4 +1,5 @@
 import { aiCommand } from "./ai.js";
+import { announceCommand } from "./announce.js";
 import type { Command } from "../types.js";
 import { birthdayCommand } from "./birthday.js";
 import { drawCommand } from "./draw.js";
@@ -16,6 +17,7 @@ import { roleCommand } from "./role.js";
 import { rolePanelCommand } from "./role-panel.js";
 import { serverBuilderCommand } from "./server-builder.js";
 import { setupCommand } from "./setup.js";
+import { starboardCommand } from "./starboard.js";
 import { suggestPanelCommand } from "./suggest-panel.js";
 import { tempVcCommand } from "./temp-vc.js";
 import { ticketPanelCommand } from "./ticket-panel.js";
@@ -23,6 +25,8 @@ import { voiceCommand } from "./voice.js";
 import { welcomeCommand } from "./welcome.js";
 
 export const commands: Command[] = [
+  announceCommand,
+  starboardCommand,
   helpCommand,
   aiCommand,
   setupCommand,

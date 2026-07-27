@@ -4,6 +4,7 @@ import { levelFromXp, randomXp } from "../utils/levels.js";
 import { palette, panelEmbed } from "../utils/ui.js";
 import { env } from "../env.js";
 import { generateAiReply, hasAiKey } from "./ai.js";
+import { buildVisualAttachment } from "./visual-message.js";
 
 const xpCooldowns = new Map<string, number>();
 const contentIntentWarnings = new Set<string>();
@@ -25,6 +26,32 @@ async function handleLeveling(message: Message<true>) {
     : message.channel;
 
   if (!target?.isTextBased() || target.isDMBased()) return;
+
+  const attachment = await buildVisualAttachment({
+    guildId: message.guild.id,
+    studioType: "level-up",
+    user: message.author,
+    variables: {
+      user: message.member?.displayName ?? message.author.username,
+      mention: `@${message.author.username}`,
+      server: message.guild.name,
+      level: result.record.level,
+      xp: result.record.xp
+    },
+    fileName: "level-up"
+  }).catch((error) => {
+    console.error("Visual level-up render failed:", error);
+    return null;
+  });
+
+  if (attachment) {
+    await target.send({
+      content: `${message.author} reached level **${result.record.level}**.`,
+      files: [attachment]
+    }).catch(() => null);
+    return;
+  }
+
   await target.send({
     embeds: [
       panelEmbed(

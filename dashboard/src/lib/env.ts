@@ -5,6 +5,8 @@ type DashboardEnv = {
   baseUrl: string;
   sessionSecret: string;
   databaseUrl: string;
+  supabaseUrl: string | null;
+  supabaseServiceRoleKey: string | null;
 };
 
 function requireEnv(name: string) {
@@ -22,6 +24,8 @@ export function getEnv(): DashboardEnv {
     discordToken: requireEnv("DISCORD_TOKEN"),
     baseUrl: requireEnv("DASHBOARD_BASE_URL").replace(/\/$/, ""),
     sessionSecret: requireEnv("DASHBOARD_SESSION_SECRET"),
-    databaseUrl: requireEnv("DATABASE_URL")
+    databaseUrl: requireEnv("DATABASE_URL"),
+    supabaseUrl: process.env.SUPABASE_URL?.trim().replace(/\/$/, "") || null,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null
   };
 }

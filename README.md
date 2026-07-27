@@ -57,8 +57,8 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 | Leveling | XP, rank cards, leaderboards, and configurable level-up announcements |
 | Voice | Join-to-create temporary channels with automatic empty-room cleanup |
 | Server builder | Preview, build, and clean complete server layouts with roles, categories, channels, panels, and bot wiring |
-| Dashboard | Discord OAuth, guild selection, live roles/channels, Supabase-backed settings, and the visual Welcome Studio |
-| Welcome Studio | Drag, resize, layers, snapping, variables, typography, backgrounds, uploads, effects, presets, undo/redo, and versioned publishing |
+| Dashboard | Discord OAuth, guild selection, live roles/channels, Supabase-backed settings, and eleven visual Studios |
+| Visual Studios | Welcome, Goodbye, Ticket, Music, Rank, Level Up, Starboard, Birthday, Announcement, Logging, and Moderation editors |
 
 ## // command index
 
@@ -190,22 +190,26 @@ Apply:
 ```text
 supabase/migrations/001_discord_bot_core_schema.sql
 supabase/migrations/002_visual_studio_foundation.sql
+supabase/migrations/003_visual_asset_library.sql
+supabase/migrations/004_starboard_engine.sql
 ```
 
 Run the migrations in numeric order. The database stores guild configuration, moderation cases, polls, role panels, giveaways, XP, birthdays, temporary voice state, visual Studio documents, and immutable template versions. It remembers the lore so the process does not have to.
 
-## // visual studio
+## // visual studios
 
-Open the dashboard, choose a server, then enter **Welcome**. The Welcome Studio is the first editor running on the shared visual-document engine.
+Open the dashboard, choose a server, then enter **Studios**. Every surface uses the same visual-document engine while keeping its own canvas, variables, presets, saved document, and immutable version history.
 
-- The 960x360 canvas is the source of truth for both dashboard preview and Discord output.
+- Canvas formats range from 960x360 event cards to 1200x600 announcement covers.
 - **Publish** stores a sanitized document and creates a new immutable version in Supabase.
-- `{user}`, `{mention}`, `{server}`, `{membercount}`, `{inviter}`, and `{created}` are replaced at render time.
-- Uploaded editor images are currently capped at 1.5 MB and stored in the template document. Supabase Storage is the intended next step for a reusable asset library.
-- On member join and `/welcome test`, the bot renders the active document with the real member avatar through `@napi-rs/canvas`.
-- If no visual template exists, the migration is missing, or rendering fails, blunt38 sends the existing embed welcome instead.
+- Each editor exposes only the runtime variables that its event understands.
+- With Supabase Storage configured, uploads become reusable per-server assets capped at 8 MB.
+- Without Storage credentials, editor uploads fall back to embedded images so local work still functions.
+- The bot renders active templates through `@napi-rs/canvas` for joins, exits, ticket panels, music, rank, level-up, birthdays, announcements, logging, and moderation.
+- `/starboard setup` adds reaction thresholds, duplicate protection, and visual community highlights.
+- If a template is missing or rendering fails, blunt38 sends the existing embed or text response instead.
 
-The same document contract is ready for Goodbye, Tickets, Music, Rank, Level Up, Starboard, Birthday, Announcements, Logging, and Moderation Studios.
+Asset storage is server-only. Never expose `SUPABASE_SERVICE_ROLE_KEY` to browser code.
 
 ## // give it a brain
 
@@ -284,6 +288,8 @@ DISCORD_TOKEN=your_bot_token
 DASHBOARD_BASE_URL=https://bot.your-domain.com
 DASHBOARD_SESSION_SECRET=replace_with_a_long_random_secret
 DATABASE_URL=your_supabase_pooler_url
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
 ```
 
 OAuth callback:

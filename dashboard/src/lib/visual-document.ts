@@ -107,6 +107,122 @@ export type VisualTemplateEnvelope = {
   updatedAt: string | null;
 };
 
+export type VisualStudioDefinition = {
+  type: VisualStudioType;
+  label: string;
+  eyebrow: string;
+  description: string;
+  format: string;
+  accent: string;
+  variables: readonly string[];
+};
+
+export const visualStudioCatalog: readonly VisualStudioDefinition[] = [
+  {
+    type: "welcome",
+    label: "Welcome",
+    eyebrow: "ARRIVAL SCREEN",
+    description: "The first frame a new member sees.",
+    format: "960 x 360",
+    accent: "#d797d8",
+    variables: ["{user}", "{mention}", "{server}", "{membercount}", "{inviter}"]
+  },
+  {
+    type: "goodbye",
+    label: "Goodbye",
+    eyebrow: "EXIT SIGNAL",
+    description: "A quiet final transmission for departures.",
+    format: "960 x 360",
+    accent: "#9b91c7",
+    variables: ["{user}", "{server}", "{membercount}"]
+  },
+  {
+    type: "ticket",
+    label: "Ticket",
+    eyebrow: "SUPPORT WINDOW",
+    description: "The cover image for private support threads.",
+    format: "960 x 360",
+    accent: "#7fcbd1",
+    variables: ["{user}", "{ticket}", "{server}", "{staff}"]
+  },
+  {
+    type: "music",
+    label: "Music Player",
+    eyebrow: "NOW PLAYING",
+    description: "Album-led playback art for voice sessions.",
+    format: "960 x 360",
+    accent: "#79c8d9",
+    variables: ["{track}", "{artist}", "{duration}", "{user}", "{server}"]
+  },
+  {
+    type: "rank",
+    label: "Rank",
+    eyebrow: "PLAYER FILE",
+    description: "Personal XP and position card.",
+    format: "960 x 360",
+    accent: "#c69ad5",
+    variables: ["{user}", "{level}", "{xp}", "{nextxp}", "{rank}"]
+  },
+  {
+    type: "level-up",
+    label: "Level Up",
+    eyebrow: "NEW LEVEL",
+    description: "A compact achievement transmission.",
+    format: "960 x 360",
+    accent: "#d9b76f",
+    variables: ["{user}", "{level}", "{xp}", "{server}"]
+  },
+  {
+    type: "starboard",
+    label: "Starboard",
+    eyebrow: "SAVED MOMENT",
+    description: "A featured-message frame for community highlights.",
+    format: "960 x 420",
+    accent: "#d4ae69",
+    variables: ["{user}", "{message}", "{channel}", "{stars}", "{server}"]
+  },
+  {
+    type: "birthday",
+    label: "Birthday",
+    eyebrow: "SPECIAL DATE",
+    description: "Soft celebration art without party-store energy.",
+    format: "960 x 360",
+    accent: "#e3a2bd",
+    variables: ["{user}", "{mention}", "{age}", "{server}"]
+  },
+  {
+    type: "announcement",
+    label: "Announcement",
+    eyebrow: "BROADCAST",
+    description: "Reusable editorial covers for server news.",
+    format: "1200 x 600",
+    accent: "#9f98cf",
+    variables: ["{title}", "{message}", "{channel}", "{server}"]
+  },
+  {
+    type: "logging",
+    label: "Logging",
+    eyebrow: "SYSTEM RECORD",
+    description: "Readable audit cards for staff channels.",
+    format: "960 x 360",
+    accent: "#79c6bd",
+    variables: ["{user}", "{action}", "{channel}", "{created}"]
+  },
+  {
+    type: "moderation",
+    label: "Moderation",
+    eyebrow: "STAFF ACTION",
+    description: "Clear case cards for warns, mutes, kicks, and bans.",
+    format: "960 x 360",
+    accent: "#cf889d",
+    variables: ["{user}", "{moderator}", "{action}", "{reason}", "{created}"]
+  }
+] as const;
+
+export function getVisualStudioDefinition(studioType: VisualStudioType) {
+  return visualStudioCatalog.find((studio) => studio.type === studioType) ?? visualStudioCatalog[0];
+}
+
 const sampleVariables: Record<string, string> = {
   "{user}": "Raven",
   "{mention}": "@Raven",
@@ -114,7 +230,24 @@ const sampleVariables: Record<string, string> = {
   "{membercount}": "2,438",
   "{count}": "2,438",
   "{inviter}": "Eclipxse",
-  "{created}": "2 years ago"
+  "{created}": "2 minutes ago",
+  "{ticket}": "047",
+  "{staff}": "Support Team",
+  "{track}": "drugs don't work",
+  "{artist}": "unknown signal",
+  "{duration}": "03:38",
+  "{level}": "38",
+  "{xp}": "7,420",
+  "{nextxp}": "8,000",
+  "{rank}": "#04",
+  "{stars}": "38",
+  "{message}": "some things stay saved.",
+  "{channel}": "#lounge",
+  "{age}": "18",
+  "{title}": "late night transmission",
+  "{action}": "WARN",
+  "{moderator}": "Raven",
+  "{reason}": "read the room"
 };
 
 export const variableOptions = [
@@ -123,7 +256,24 @@ export const variableOptions = [
   "{server}",
   "{membercount}",
   "{inviter}",
-  "{created}"
+  "{created}",
+  "{ticket}",
+  "{staff}",
+  "{track}",
+  "{artist}",
+  "{duration}",
+  "{level}",
+  "{xp}",
+  "{nextxp}",
+  "{rank}",
+  "{stars}",
+  "{message}",
+  "{channel}",
+  "{age}",
+  "{title}",
+  "{action}",
+  "{moderator}",
+  "{reason}"
 ] as const;
 
 export const fontOptions = [
@@ -219,11 +369,13 @@ export function createImageElement(src: string, x = 80, y = 80): VisualImageElem
 }
 
 export function createDefaultVisualDocument(studioType: VisualStudioType = "welcome"): VisualDocument {
+  const definition = getVisualStudioDefinition(studioType);
+  const profile = studioProfiles[studioType];
   const panel = createShapeElement();
   const avatar = createAvatarElement();
-  const title = createTextElement("welcome, {user}.", 306, 102);
-  const subtitle = createTextElement("you are member {membercount} of {server}", 310, 177);
-  const signal = createTextElement("always watching.", 310, 236);
+  const title = createTextElement(profile.title, 306, 102);
+  const subtitle = createTextElement(profile.subtitle, 310, 177);
+  const signal = createTextElement(profile.signal, 310, 236);
 
   title.name = "Headline";
   subtitle.name = "Member line";
@@ -238,23 +390,109 @@ export function createDefaultVisualDocument(studioType: VisualStudioType = "welc
   signal.fontWeight = 500;
   signal.color = "#987daf";
   signal.height = 32;
+  panel.borderColor = definition.accent;
+
+  const [width, height] = definition.format.split(" x ").map(Number);
 
   return {
     schemaVersion: 1,
     studioType,
-    name: "Midnight arrival",
-    canvas: { width: 960, height: 360 },
+    name: profile.name,
+    canvas: { width, height },
     background: {
       type: "gradient",
-      value: "linear-gradient(135deg, #110a19 0%, #261337 52%, #0e0914 100%)",
-      overlay: "#0a0710",
-      overlayOpacity: 0.08,
+      value: profile.background,
+      overlay: "#30223f",
+      overlayOpacity: 0.04,
       blur: 0,
-      noise: 0.08
+      noise: 0.16
     },
     elements: [panel, avatar, title, subtitle, signal]
   };
 }
+
+const studioProfiles: Record<
+  VisualStudioType,
+  { name: string; title: string; subtitle: string; signal: string; background: string }
+> = {
+  welcome: {
+    name: "soft arrival",
+    title: "welcome, {user}.",
+    subtitle: "you are member {membercount} of {server}",
+    signal: "you found the right frequency.",
+    background: "linear-gradient(135deg, #ddd0e5 0%, #b9a6cc 54%, #8fcbd1 100%)"
+  },
+  goodbye: {
+    name: "signal lost",
+    title: "{user} left the screen.",
+    subtitle: "{server} has {membercount} people still awake",
+    signal: "no dramatic exit music.",
+    background: "linear-gradient(135deg, #d9cfdf 0%, #a99bbb 58%, #8382a8 100%)"
+  },
+  ticket: {
+    name: "support window",
+    title: "ticket #{ticket}",
+    subtitle: "{user}, somebody will be here soon.",
+    signal: "{staff} // private channel",
+    background: "linear-gradient(135deg, #d8d1e4 0%, #98c9cf 58%, #8c83b5 100%)"
+  },
+  music: {
+    name: "now playing",
+    title: "{track}",
+    subtitle: "{artist} // {duration}",
+    signal: "requested by {user}",
+    background: "linear-gradient(135deg, #d2cce2 0%, #78c4d0 55%, #b878b8 100%)"
+  },
+  rank: {
+    name: "player file",
+    title: "{user} // level {level}",
+    subtitle: "{xp} xp // next {nextxp}",
+    signal: "server rank {rank}",
+    background: "linear-gradient(135deg, #e0d1e5 0%, #c49bce 58%, #8ea7cb 100%)"
+  },
+  "level-up": {
+    name: "new level",
+    title: "level {level} reached.",
+    subtitle: "{user} keeps going somehow",
+    signal: "{xp} xp recorded",
+    background: "linear-gradient(135deg, #e2d5e3 0%, #d5b46e 52%, #b18fc4 100%)"
+  },
+  starboard: {
+    name: "saved moment",
+    title: "{stars} people kept this.",
+    subtitle: "{message}",
+    signal: "{user} // {channel}",
+    background: "linear-gradient(135deg, #e0d6e5 0%, #d2ad6b 52%, #9c8dc3 100%)"
+  },
+  birthday: {
+    name: "special date",
+    title: "today belongs to {user}.",
+    subtitle: "happy birthday from {server}",
+    signal: "try not to get older too loudly.",
+    background: "linear-gradient(135deg, #e6d5e4 0%, #dfa0bd 52%, #8fc8cb 100%)"
+  },
+  announcement: {
+    name: "broadcast frame",
+    title: "{title}",
+    subtitle: "{message}",
+    signal: "{server} // {channel}",
+    background: "linear-gradient(135deg, #d9d0e3 0%, #9f96ca 52%, #6fc4c7 100%)"
+  },
+  logging: {
+    name: "system record",
+    title: "{action} recorded.",
+    subtitle: "{user} // {channel}",
+    signal: "{created}",
+    background: "linear-gradient(135deg, #d4d8e0 0%, #78bfb8 52%, #9184b3 100%)"
+  },
+  moderation: {
+    name: "staff action",
+    title: "{action} // {user}",
+    subtitle: "{reason}",
+    signal: "{moderator} // {created}",
+    background: "linear-gradient(135deg, #ded0df 0%, #cd879d 52%, #8e82b2 100%)"
+  }
+};
 
 const defaultDocument = createDefaultVisualDocument();
 
@@ -384,54 +622,80 @@ export function sanitizeVisualDocument(input: unknown, studioType: VisualStudioT
   };
 }
 
-export const welcomePresets: Array<{ name: string; document: VisualDocument }> = [
-  { name: "Midnight", document: createDefaultVisualDocument("welcome") },
-  {
-    name: "Signal",
-    document: sanitizeVisualDocument(
-      {
-        ...createDefaultVisualDocument("welcome"),
-        name: "Signal arrival",
-        background: {
-          type: "gradient",
-          value: "linear-gradient(145deg, #07070a 0%, #1d0d2d 58%, #3a1758 100%)",
-          overlay: "#000000",
-          overlayOpacity: 0.04,
-          blur: 0,
-          noise: 0.15
+export function getVisualPresets(
+  studioType: VisualStudioType
+): Array<{ name: string; document: VisualDocument }> {
+  const base = createDefaultVisualDocument(studioType);
+  const definition = getVisualStudioDefinition(studioType);
+
+  return [
+    { name: "Lavender OS", document: base },
+    {
+      name: "Pocket Signal",
+      document: sanitizeVisualDocument(
+        {
+          ...base,
+          name: `${definition.label} pocket signal`,
+          background: {
+            ...base.background,
+            value: "linear-gradient(145deg, #e0d3e6 0%, #b9a5cc 55%, #77c4c9 100%)",
+            noise: 0.22
+          },
+          elements: base.elements.map((element) =>
+            element.type === "shape"
+              ? {
+                  ...element,
+                  fill: "rgba(245, 237, 247, 0.58)",
+                  borderColor: "#4d385f",
+                  borderWidth: 3,
+                  radius: 3
+                }
+              : element.type === "text"
+                ? { ...element, color: "#342141", shadowBlur: 0 }
+                : element
+          )
         },
-        elements: createDefaultVisualDocument("welcome").elements.map((element) =>
-          element.type === "shape"
-            ? { ...element, fill: "rgba(7, 7, 10, 0.82)", borderColor: "#ba8ee8", radius: 4 }
-            : element
-        )
-      },
-      "welcome"
-    )
-  },
-  {
-    name: "Monolith",
-    document: sanitizeVisualDocument(
-      {
-        ...createDefaultVisualDocument("welcome"),
-        name: "Monolith",
-        background: {
-          type: "color",
-          value: "#0b0a0d",
-          overlay: "#000000",
-          overlayOpacity: 0,
-          blur: 0,
-          noise: 0.04
+        studioType
+      )
+    },
+    {
+      name: "Afterimage",
+      document: sanitizeVisualDocument(
+        {
+          ...base,
+          name: `${definition.label} afterimage`,
+          background: {
+            ...base.background,
+            value: "linear-gradient(135deg, #c5b6d2 0%, #d691bd 48%, #73cbd1 100%)",
+            overlay: "#51335f",
+            overlayOpacity: 0.08,
+            noise: 0.3
+          },
+          elements: base.elements.map((element) => {
+            if (element.type === "shape") {
+              return {
+                ...element,
+                fill: "rgba(255, 248, 252, 0.35)",
+                borderColor: definition.accent,
+                borderWidth: 4,
+                radius: 0
+              };
+            }
+            if (element.type === "text") {
+              return {
+                ...element,
+                color: "#2b1738",
+                shadowColor: "#7ee0dd",
+                shadowBlur: 8
+              };
+            }
+            return element;
+          })
         },
-        elements: createDefaultVisualDocument("welcome").elements.map((element) => {
-          if (element.type === "shape") {
-            return { ...element, fill: "#151119", borderColor: "#4d4058", radius: 0 };
-          }
-          if (element.type === "text") return { ...element, color: "#e7e0ec" };
-          return element;
-        })
-      },
-      "welcome"
-    )
-  }
-];
+        studioType
+      )
+    }
+  ];
+}
+
+export const welcomePresets = getVisualPresets("welcome");

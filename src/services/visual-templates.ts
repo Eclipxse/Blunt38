@@ -1,6 +1,17 @@
 import { postgresEnabled, query } from "./db.js";
 
-export type VisualStudioType = "welcome";
+export type VisualStudioType =
+  | "welcome"
+  | "goodbye"
+  | "ticket"
+  | "music"
+  | "rank"
+  | "level-up"
+  | "starboard"
+  | "birthday"
+  | "announcement"
+  | "logging"
+  | "moderation";
 export type VisualElementType = "text" | "avatar" | "shape" | "image";
 
 type VisualElementBase = {
@@ -179,10 +190,13 @@ function sanitizeElement(
   };
 }
 
-function sanitizeVisualDocument(input: unknown): VisualDocument | null {
+function sanitizeVisualDocument(
+  input: unknown,
+  studioType: VisualStudioType
+): VisualDocument | null {
   if (!input || typeof input !== "object") return null;
   const raw = input as Partial<VisualDocument>;
-  if (raw.schemaVersion !== 1 || raw.studioType !== "welcome") return null;
+  if (raw.schemaVersion !== 1 || raw.studioType !== studioType) return null;
 
   const rawCanvas =
     raw.canvas && typeof raw.canvas === "object" ? raw.canvas : { width: 960, height: 360 };
@@ -194,7 +208,7 @@ function sanitizeVisualDocument(input: unknown): VisualDocument | null {
 
   return {
     schemaVersion: 1,
-    studioType: "welcome",
+    studioType,
     name: string(raw.name, "Welcome", 80),
     canvas: { width, height },
     background: {
@@ -229,7 +243,7 @@ export async function getActiveVisualTemplate(
        limit 1`,
       [guildId, studioType]
     );
-    return sanitizeVisualDocument(result.rows[0]?.document);
+    return sanitizeVisualDocument(result.rows[0]?.document, studioType);
   } catch (error) {
     const code =
       error && typeof error === "object" && "code" in error

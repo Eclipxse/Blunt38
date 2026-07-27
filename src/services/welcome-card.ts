@@ -9,9 +9,9 @@ import type {
   VisualTextElement
 } from "./visual-templates.js";
 
-type WelcomeCardContext = {
-  member: GuildMember;
-  inviter?: User | null;
+export type VisualCardContext = {
+  avatarUrl: string;
+  variables: Record<string, string | number | undefined | null>;
 };
 
 type DrawRect = {
@@ -21,24 +21,13 @@ type DrawRect = {
   height: number;
 };
 
-function resolveVariables(value: string, context: WelcomeCardContext) {
-  const member = context.member;
-  const replacements: Record<string, string> = {
-    "{user}": member.displayName,
-    "{mention}": `@${member.user.username}`,
-    "{server}": member.guild.name,
-    "{membercount}": member.guild.memberCount.toLocaleString("en-US"),
-    "{count}": member.guild.memberCount.toLocaleString("en-US"),
-    "{inviter}": context.inviter?.username ?? "someone",
-    "{created}": member.user.createdAt.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric"
-    })
-  };
-
-  return Object.entries(replacements).reduce(
-    (result, [variable, replacement]) => result.replaceAll(variable, replacement),
+function resolveVariables(value: string, context: VisualCardContext) {
+  return Object.entries(context.variables).reduce(
+    (result, [variable, replacement]) =>
+      result.replaceAll(
+        variable.startsWith("{") ? variable : `{${variable}}`,
+        replacement === undefined || replacement === null ? "" : String(replacement)
+      ),
     value
   );
 }
@@ -228,7 +217,7 @@ function drawSpacedText(
 function drawText(
   ctx: SKRSContext2D,
   element: VisualTextElement,
-  context: WelcomeCardContext
+  context: VisualCardContext
 ) {
   const text = resolveVariables(element.text, context);
   ctx.font = `${element.fontWeight} ${element.fontSize}px "${fontFamily(element.fontFamily)}"`;
@@ -322,7 +311,7 @@ async function drawElement(
   ctx: SKRSContext2D,
   element: VisualElement,
   avatar: Image,
-  context: WelcomeCardContext
+  context: VisualCardContext
 ) {
   if (element.hidden || element.opacity <= 0) return;
   ctx.save();
@@ -338,20 +327,41 @@ async function drawElement(
   ctx.restore();
 }
 
-export async function renderWelcomeCard(
+export async function renderVisualCard(
   document: VisualDocument,
-  context: WelcomeCardContext
+  context: VisualCardContext
 ) {
   const canvas = createCanvas(document.canvas.width, document.canvas.height);
   const ctx = canvas.getContext("2d");
   await drawBackground(ctx, document);
-  const avatar = await loadRemoteImage(
-    context.member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true })
-  );
+  const avatar = await loadRemoteImage(context.avatarUrl);
 
   for (const element of document.elements) {
     await drawElement(ctx, element, avatar, context);
   }
 
   return canvas.toBuffer("image/png");
+}
+
+export async function renderWelcomeCard(
+  document: VisualDocument,
+  context: { member: GuildMember; inviter?: User | null }
+) {
+  const member = context.member;
+  return renderVisualCard(document, {
+    avatarUrl: member.displayAvatarURL({ extension: "png", size: 512, forceStatic: true }),
+    variables: {
+      user: member.displayName,
+      mention: `@${member.user.username}`,
+      server: member.guild.name,
+      membercount: member.guild.memberCount.toLocaleString("en-US"),
+      count: member.guild.memberCount.toLocaleString("en-US"),
+      inviter: context.inviter?.username ?? "someone",
+      created: member.user.createdAt.toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric"
+      })
+    }
+  });
 }
