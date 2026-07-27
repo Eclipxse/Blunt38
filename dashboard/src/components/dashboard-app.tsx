@@ -106,11 +106,11 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
 ];
 
 const colorOptions = [
-  { label: "Cyan", value: 0x38dff8 },
-  { label: "Lime", value: 0xa7f950 },
-  { label: "Coral", value: 0xff5d7d },
-  { label: "Amber", value: 0xffbf47 },
-  { label: "Violet", value: 0x8d7aff }
+  { label: "Teal", value: 0x45d4c5 },
+  { label: "Mint", value: 0x8fd39f },
+  { label: "Rose", value: 0xf18fba },
+  { label: "Gold", value: 0xf4c44f },
+  { label: "Violet", value: 0xa189cf }
 ];
 
 const personaOptions: Array<{ key: AiPersona; label: string }> = [
@@ -137,7 +137,7 @@ const loginModules: Array<{
     command: "/ai setup",
     title: "Persona engine",
     description: "Channel-locked replies with a custom voice, fast Groq routing, and admin controls.",
-    accent: "#38dff8",
+    accent: "#45d4c5",
     icon: Brain,
     stats: [
       { label: "Latency", value: "Fast" },
@@ -152,7 +152,7 @@ const loginModules: Array<{
     command: "/music play",
     title: "Music deck",
     description: "Lavalink playback, queue actions, loop modes, and clean controls for voice sessions.",
-    accent: "#a7f950",
+    accent: "#7897f2",
     icon: Disc3,
     stats: [
       { label: "Engine", value: "Lava" },
@@ -167,7 +167,7 @@ const loginModules: Array<{
     command: "/ticket-panel",
     title: "Support cockpit",
     description: "Private category routing, staff roles, claim flow, lock flow, and transcript actions.",
-    accent: "#ffbf47",
+    accent: "#f4c44f",
     icon: Ticket,
     stats: [
       { label: "Panel", value: "Ready" },
@@ -182,7 +182,7 @@ const loginModules: Array<{
     command: "/leveling enable",
     title: "XP systems",
     description: "Rank tracking, leaderboard storage, announcement channels, and growth signals.",
-    accent: "#ff5d7d",
+    accent: "#f18fba",
     icon: Crown,
     stats: [
       { label: "Storage", value: "SQL" },
@@ -1071,7 +1071,7 @@ function ModuleView({
               value={String(config.accentColor)}
               options={colorOptions.map((item) => ({ id: String(item.value), name: item.label }))}
               placeholder="Pick color"
-              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x38dff8))}
+              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x45d4c5))}
             />
           </div>
         </section>
