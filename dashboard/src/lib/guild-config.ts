@@ -71,7 +71,7 @@ function fallback(guildId: string): GuildConfig {
     aiResponderChannelId: null,
     aiResponderPrompt: defaultPrompt,
     aiResponderPersona: "genz-girl",
-    accentColor: 0x887cf2,
+    accentColor: 0x948ce8,
     updatedAt: null
   };
 }
@@ -122,7 +122,7 @@ function cleanPersona(value: unknown): AiPersona {
 }
 
 function cleanColor(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 0x887cf2;
+  if (typeof value !== "number" || !Number.isFinite(value)) return 0x948ce8;
   return Math.max(0, Math.min(0xffffff, Math.round(value)));
 }
 

@@ -106,12 +106,12 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
 ];
 
 const colorOptions = [
-  { label: "Periwinkle", value: 0x887cf2 },
-  { label: "Aqua", value: 0x35c8b8 },
-  { label: "Bubblegum", value: 0xf36fa8 },
-  { label: "Marigold", value: 0xf3bd4f },
-  { label: "Pistachio", value: 0x9ad26b },
-  { label: "Orchid", value: 0xb079dc }
+  { label: "Moon Violet", value: 0x948ce8 },
+  { label: "Ghost Teal", value: 0x53c9b8 },
+  { label: "Wine Rose", value: 0xdb739e },
+  { label: "Antique Gold", value: 0xd8ad5c },
+  { label: "Moss Signal", value: 0x8abd82 },
+  { label: "Night Orchid", value: 0xa17eca }
 ];
 
 const personaOptions: Array<{ key: AiPersona; label: string }> = [
@@ -138,7 +138,7 @@ const loginModules: Array<{
     command: "/ai setup",
     title: "Persona engine",
     description: "Channel-locked replies with a custom voice, fast Groq routing, and admin controls.",
-    accent: "#f36fa8",
+    accent: "#db739e",
     icon: Brain,
     stats: [
       { label: "Latency", value: "Fast" },
@@ -153,7 +153,7 @@ const loginModules: Array<{
     command: "/music play",
     title: "Music deck",
     description: "Lavalink playback, queue actions, loop modes, and clean controls for voice sessions.",
-    accent: "#887cf2",
+    accent: "#948ce8",
     icon: Disc3,
     stats: [
       { label: "Engine", value: "Lava" },
@@ -168,7 +168,7 @@ const loginModules: Array<{
     command: "/ticket-panel",
     title: "Support cockpit",
     description: "Private category routing, staff roles, claim flow, lock flow, and transcript actions.",
-    accent: "#f3bd4f",
+    accent: "#d8ad5c",
     icon: Ticket,
     stats: [
       { label: "Panel", value: "Ready" },
@@ -183,7 +183,7 @@ const loginModules: Array<{
     command: "/leveling enable",
     title: "XP systems",
     description: "Rank tracking, leaderboard storage, announcement channels, and growth signals.",
-    accent: "#9ad26b",
+    accent: "#8abd82",
     icon: Crown,
     stats: [
       { label: "Storage", value: "SQL" },
@@ -1072,7 +1072,7 @@ function ModuleView({
               value={String(config.accentColor)}
               options={colorOptions.map((item) => ({ id: String(item.value), name: item.label }))}
               placeholder="Pick color"
-              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x887cf2))}
+              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x948ce8))}
             />
           </div>
         </section>
