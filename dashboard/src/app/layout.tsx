@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, IBM_Plex_Mono, Silkscreen } from "next/font/google";
 import { MotionProvider } from "@/components/motion-provider";
+import { TitleSignal } from "@/components/title-signal";
 import "./globals.css";
 
 const display = Silkscreen({
@@ -21,8 +22,22 @@ const geistMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "blunt38 Dashboard",
-  description: "blunt38 premium Discord control center"
+  title: {
+    default: "blunt38 // control signal",
+    template: "%s // blunt38"
+  },
+  description: "blunt38 premium Discord control center",
+  applicationName: "blunt38",
+  icons: {
+    icon: [
+      {
+        url: "/brand/blunt38-logo.jpg?v=2",
+        type: "image/jpeg"
+      }
+    ],
+    shortcut: "/brand/blunt38-logo.jpg?v=2",
+    apple: "/brand/blunt38-logo.jpg?v=2"
+  }
 };
 
 export default function RootLayout({
@@ -33,6 +48,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${round.variable} ${geistMono.variable}`}>
       <body>
+        <TitleSignal />
         <MotionProvider>{children}</MotionProvider>
       </body>
     </html>
