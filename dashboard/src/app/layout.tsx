@@ -22,12 +22,37 @@ const geistMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://panel.eclipxse.in"),
   title: {
     default: "blunt38",
     template: "%s // blunt38"
   },
-  description: "blunt38 premium Discord control center",
+  description:
+    "AI, music, studio, and server automation. 38 reasons. None explained.",
   applicationName: "blunt38",
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "blunt38",
+    title: "blunt38 // signal online",
+    description:
+      "AI, music, studio, and server automation. 38 reasons. None explained.",
+    images: [
+      {
+        url: "/api/og?v=1",
+        width: 1200,
+        height: 630,
+        alt: "blunt38 ASCII control signal"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "blunt38 // signal online",
+    description:
+      "AI, music, studio, and server automation. 38 reasons. None explained.",
+    images: ["/api/og?v=1"]
+  },
   icons: {
     icon: [
       {
