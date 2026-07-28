@@ -28,18 +28,17 @@ export const metadata: Metadata = {
     template: "%s // blunt38"
   },
   description:
-    "AI, music, studio, and server automation. 38 reasons. None explained.",
+    "38 reasons. None explained.",
   applicationName: "blunt38",
   openGraph: {
     type: "website",
     url: "/",
     siteName: "blunt38",
-    title: "blunt38 // signal online",
-    description:
-      "AI, music, studio, and server automation. 38 reasons. None explained.",
+    title: "blunt38",
+    description: "38 reasons. None explained.",
     images: [
       {
-        url: "/api/og?v=1",
+        url: "/api/og?v=2",
         width: 1200,
         height: 630,
         alt: "blunt38 ASCII control signal"
@@ -48,10 +47,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "blunt38 // signal online",
-    description:
-      "AI, music, studio, and server automation. 38 reasons. None explained.",
-    images: ["/api/og?v=1"]
+    title: "blunt38",
+    description: "38 reasons. None explained.",
+    images: ["/api/og?v=2"]
   },
   icons: {
     icon: [
