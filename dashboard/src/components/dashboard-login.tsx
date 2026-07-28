@@ -2,9 +2,20 @@
 
 import { ArrowRight, LockKeyhole } from "lucide-react";
 
+import {
+  AsciiBanner,
+  DotShift,
+  ParticleWord
+} from "@/components/signal-effects";
+
 export function DashboardLogin({ error }: { error: string | null }) {
   return (
     <main className="minimal-login">
+      <div className="login-signal-field" aria-hidden="true">
+        <DotShift className="login-dot-shift" color="#aaa2ef" spacing={24} />
+        <AsciiBanner className="login-ascii-banner" />
+        <ParticleWord className="login-particle-word" text="BLUNT38" />
+      </div>
       <div className="minimal-login-shade" />
       <header className="minimal-login-brand">
         <img src="/brand/blunt38-logo.jpg" alt="" />
@@ -12,7 +23,7 @@ export function DashboardLogin({ error }: { error: string | null }) {
       </header>
 
       <section className="minimal-login-copy">
-        <span className="minimal-eyebrow">Discord operations</span>
+        <span className="minimal-eyebrow">Signal 38 / Discord operations</span>
         <h1>Control your server.</h1>
         <p>
           Configure the bot, keep automations tidy, and publish every change from

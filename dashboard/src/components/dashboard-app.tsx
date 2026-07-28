@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GuildConfig } from "@/lib/guild-config";
 
 import { DashboardLogin } from "@/components/dashboard-login";
+import { DashboardSignalBackdrop } from "@/components/signal-effects";
 import { StudioHub } from "@/components/studio-hub";
 import {
   HomeView,
@@ -91,6 +92,7 @@ export function DashboardApp() {
     initialRoute.automation
   );
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [studioFocused, setStudioFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -234,6 +236,10 @@ export function DashboardApp() {
     };
   }, [dirty]);
 
+  useEffect(() => {
+    if (view !== "studio") setStudioFocused(false);
+  }, [view]);
+
   const updateConfig: ConfigUpdater = (key, value) => {
     setPayload((current) => {
       if (!current) return current;
@@ -349,10 +355,13 @@ export function DashboardApp() {
       typeof window !== "undefined" ? window.location.search : ""
     );
     const authFailed = params.get("auth") === "failed";
+    const authMissingEnv = params.get("auth") === "missing-env";
     return (
       <DashboardLogin
         error={
-          authFailed
+          authMissingEnv
+            ? "Local Discord login is not configured. Add dashboard/.env.local or use panel.eclipxse.in."
+            : authFailed
             ? "Discord login failed. Check the OAuth redirect URI."
             : error
         }
@@ -375,7 +384,8 @@ export function DashboardApp() {
   }
 
   return (
-    <main className="control-app">
+    <main className={`control-app ${studioFocused ? "studio-focus" : ""}`}>
+      <DashboardSignalBackdrop />
       <aside className="control-rail">
         <button
           className="control-logo"
@@ -501,6 +511,7 @@ export function DashboardApp() {
             <StudioHub
               guildId={selectedGuildId}
               guildName={selectedGuild?.name ?? "your server"}
+              onFocusChange={setStudioFocused}
             />
           )}
         </div>

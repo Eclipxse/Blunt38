@@ -14,6 +14,18 @@ function requireEnv(name: string) {
   if (!value) {
     throw new Error(`Missing ${name}`);
   }
+
+  const normalized = value.toLowerCase();
+  const isPlaceholder =
+    normalized.includes("your_") ||
+    normalized.includes("replace_with") ||
+    normalized.includes("projectref") ||
+    normalized.includes("aws-1-region");
+
+  if (isPlaceholder) {
+    throw new Error(`Replace the placeholder value for ${name}`);
+  }
+
   return value;
 }
 

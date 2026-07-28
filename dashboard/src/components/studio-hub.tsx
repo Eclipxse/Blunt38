@@ -15,7 +15,7 @@ import {
   Ticket,
   Trophy
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { VisualStudio } from "@/components/welcome-studio";
 import {
@@ -40,10 +40,12 @@ const icons = {
 
 export function StudioHub({
   guildId,
-  guildName
+  guildName,
+  onFocusChange
 }: {
   guildId: string;
   guildName: string;
+  onFocusChange?: (focused: boolean) => void;
 }) {
   const [selectedType, setSelectedType] = useState<VisualStudioType | null>(
     null
@@ -53,16 +55,21 @@ export function StudioHub({
     [selectedType]
   );
 
+  useEffect(() => {
+    onFocusChange?.(Boolean(selectedType));
+    return () => onFocusChange?.(false);
+  }, [onFocusChange, selectedType]);
+
   if (selected) {
     return (
       <div className="minimal-studio-editor">
         <header>
           <button type="button" onClick={() => setSelectedType(null)}>
             <ChevronLeft size={17} />
-            All studios
+            Exit studio
           </button>
           <div>
-            <span>{selected.eyebrow}</span>
+            <span>Focus mode / {selected.eyebrow}</span>
             <strong>{selected.label}</strong>
           </div>
         </header>
