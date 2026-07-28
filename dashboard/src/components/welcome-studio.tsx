@@ -173,6 +173,15 @@ export function VisualStudio({
     documentRef.current = document;
   }, [document]);
 
+  useEffect(() => {
+    const compactViewport = window.matchMedia("(max-width: 700px)");
+    const fitCanvas = () => setZoom(compactViewport.matches ? 0.3 : 0.72);
+
+    fitCanvas();
+    compactViewport.addEventListener("change", fitCanvas);
+    return () => compactViewport.removeEventListener("change", fitCanvas);
+  }, []);
+
   const selected = useMemo(
     () => document.elements.find((element) => element.id === selectedId) ?? null,
     [document.elements, selectedId]
