@@ -240,18 +240,6 @@ export function DashboardApp() {
     if (view !== "studio") setStudioFocused(false);
   }, [view]);
 
-  useEffect(() => {
-    let signal: string = view;
-
-    if (loading || configLoading) signal = "syncing";
-    else if (error) signal = "lost";
-    else if (saving) signal = "publishing";
-    else if (dirty) signal = "unsaved";
-    else if (!me) signal = "login";
-
-    document.documentElement.dataset.titleSignal = signal;
-  }, [configLoading, dirty, error, loading, me, saving, view]);
-
   const updateConfig: ConfigUpdater = (key, value) => {
     setPayload((current) => {
       if (!current) return current;

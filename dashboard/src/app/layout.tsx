@@ -23,7 +23,7 @@ const geistMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "blunt38 // control signal",
+    default: "blunt38",
     template: "%s // blunt38"
   },
   description: "blunt38 premium Discord control center",
