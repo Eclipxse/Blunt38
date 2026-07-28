@@ -57,10 +57,6 @@ export function StudioHub({
 
   useEffect(() => {
     onFocusChange?.(Boolean(selectedType));
-    document.documentElement.dataset.titleSignal = selectedType
-      ? `studio:${selectedType}`
-      : "studio";
-
     return () => onFocusChange?.(false);
   }, [onFocusChange, selectedType]);
 
