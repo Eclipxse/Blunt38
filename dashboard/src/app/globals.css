@@ -3941,22 +3941,24 @@ textarea {
 
 /* Signal room redesign */
 :root {
-  --ink: #252033;
-  --ink-soft: #554d61;
-  --shell: #d8ddea;
-  --shell-deep: #b8c2d9;
-  --paper: #fffdf7;
-  --paper-soft: #f5f1e9;
-  --paper-muted: #e9e5ef;
-  --signal-cyan: #45d4c5;
-  --signal-blue: #7897f2;
-  --signal-pink: #f18fba;
-  --signal-red: #ed747f;
-  --signal-gold: #f4c44f;
-  --signal-green: #8fd39f;
-  --signal-violet: #a189cf;
-  --signal-peach: #ffa97d;
-  --cyan: var(--signal-cyan);
+  --ink: #2b1b35;
+  --ink-soft: #665871;
+  --shell: #c9e0dd;
+  --shell-deep: #a9cac7;
+  --paper: #fff7e8;
+  --paper-soft: #f4ead8;
+  --paper-muted: #eadcf0;
+  --signal-primary: #887cf2;
+  --signal-aqua: #35c8b8;
+  --signal-cyan: var(--signal-primary);
+  --signal-blue: #6f8ff5;
+  --signal-pink: #f36fa8;
+  --signal-red: #e95d72;
+  --signal-gold: #f3bd4f;
+  --signal-green: #9ad26b;
+  --signal-violet: #b079dc;
+  --signal-peach: #ff9e70;
+  --cyan: var(--signal-aqua);
   --lime: var(--signal-green);
   --coral: var(--signal-red);
   --amber: var(--signal-gold);
@@ -3976,7 +3978,7 @@ textarea {
   --line: rgba(37, 32, 51, 0.34);
   --line-strong: var(--ink);
   --text: var(--ink);
-  --muted: #716a7c;
+  --muted: #796a80;
   --soft: var(--ink-soft);
   --panel: var(--paper);
   --panel-strong: var(--paper-muted);
@@ -4005,8 +4007,8 @@ html.lenis body {
 body {
   background-color: var(--shell);
   background-image:
-    linear-gradient(rgba(53, 70, 104, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(53, 70, 104, 0.06) 1px, transparent 1px),
+    linear-gradient(rgba(43, 27, 53, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 27, 53, 0.065) 1px, transparent 1px),
     repeating-linear-gradient(
       0deg,
       rgba(255, 255, 255, 0.11) 0,
@@ -4076,7 +4078,7 @@ body::after {
   grid-template-rows: auto minmax(120px, 0.8fr) minmax(210px, 1fr) auto;
   border: 2px solid var(--ink);
   background:
-    linear-gradient(rgba(255, 253, 247, 0.72), rgba(225, 232, 244, 0.94)),
+    linear-gradient(rgba(255, 247, 232, 0.78), rgba(214, 235, 231, 0.96)),
     var(--paper-muted);
   box-shadow: var(--shadow-hard);
 }
@@ -4101,7 +4103,7 @@ body::after {
 
 .brand {
   padding: 13px;
-  background: rgba(255, 253, 247, 0.88);
+  background: rgba(255, 247, 232, 0.9);
 }
 
 .brand-logo,
@@ -4148,8 +4150,8 @@ body::after {
 
 .sidebar-signal::after {
   background:
-    linear-gradient(90deg, rgba(69, 212, 197, 0.12), transparent 46%, rgba(241, 143, 186, 0.16)),
-    repeating-linear-gradient(0deg, transparent 0 3px, rgba(37, 32, 51, 0.13) 3px 4px);
+    linear-gradient(90deg, rgba(136, 124, 242, 0.16), transparent 46%, rgba(243, 111, 168, 0.2)),
+    repeating-linear-gradient(0deg, transparent 0 3px, rgba(43, 27, 53, 0.13) 3px 4px);
 }
 
 .server-strip,
@@ -4160,10 +4162,10 @@ body::after {
 
 .server-button,
 .nav-button {
-  border: 1px solid rgba(37, 32, 51, 0.7);
+  border: 1px solid rgba(43, 27, 53, 0.7);
   border-radius: 3px;
-  background: rgba(255, 253, 247, 0.78);
-  box-shadow: 2px 2px 0 rgba(37, 32, 51, 0.78);
+  background: rgba(255, 247, 232, 0.82);
+  box-shadow: 2px 2px 0 rgba(43, 27, 53, 0.78);
 }
 
 .server-button {
@@ -4196,7 +4198,7 @@ body::after {
 }
 
 .user-bar {
-  background: rgba(255, 253, 247, 0.82);
+  background: rgba(255, 247, 232, 0.86);
 }
 
 .main {
@@ -4211,7 +4213,7 @@ body::after {
   border: 2px solid var(--ink);
   background-color: var(--paper);
   background-image:
-    linear-gradient(90deg, rgba(255, 253, 247, 0.98) 0 47%, rgba(255, 253, 247, 0.86) 64%, rgba(205, 214, 234, 0.46)),
+    linear-gradient(90deg, rgba(255, 247, 232, 0.98) 0 47%, rgba(255, 247, 232, 0.88) 64%, rgba(221, 204, 235, 0.48)),
     url("/brand/blunt38-banner.jpg");
   background-position: center, right 38%;
   background-size: cover, min(58%, 840px) auto;
@@ -4236,8 +4238,8 @@ body::after {
   pointer-events: none;
   background: radial-gradient(
     280px circle at var(--spot-x, -500px) var(--spot-y, -500px),
-    rgba(69, 212, 197, 0.24),
-    rgba(120, 151, 242, 0.11) 38%,
+    rgba(136, 124, 242, 0.24),
+    rgba(243, 111, 168, 0.12) 38%,
     transparent 72%
   );
   opacity: 0;
@@ -4304,8 +4306,8 @@ body::after {
 
 .top-actions {
   padding: 5px;
-  border: 1px solid rgba(37, 32, 51, 0.28);
-  background: rgba(255, 253, 247, 0.8);
+  border: 1px solid rgba(43, 27, 53, 0.28);
+  background: rgba(255, 247, 232, 0.84);
   backdrop-filter: blur(8px);
 }
 
@@ -4329,7 +4331,7 @@ body::after {
   border: 1px solid var(--ink);
   border-radius: 2px;
   background: var(--ink);
-  box-shadow: 3px 3px 0 rgba(37, 32, 51, 0.65);
+  box-shadow: 3px 3px 0 rgba(43, 27, 53, 0.65);
   color: var(--paper);
 }
 
@@ -4358,7 +4360,7 @@ body::after {
   width: 6px;
   height: 6px;
   background: var(--signal-green);
-  box-shadow: 0 0 0 2px rgba(166, 228, 186, 0.2);
+  box-shadow: 0 0 0 2px rgba(154, 210, 107, 0.24);
 }
 
 .content-grid {
@@ -4378,8 +4380,8 @@ body::after {
 .preview-panel {
   padding: 17px;
   border: 1px solid var(--ink);
-  background-color: rgba(255, 253, 247, 0.94);
-  box-shadow: 4px 4px 0 rgba(37, 32, 51, 0.82);
+  background-color: rgba(255, 247, 232, 0.95);
+  box-shadow: 4px 4px 0 rgba(43, 27, 53, 0.82);
 }
 
 .panel + .panel {
@@ -4406,7 +4408,7 @@ body::after {
   padding: 14px;
   border: 1px solid var(--ink);
   background-color: var(--paper-soft);
-  box-shadow: 3px 3px 0 rgba(37, 32, 51, 0.8);
+  box-shadow: 3px 3px 0 rgba(43, 27, 53, 0.8);
 }
 
 .metric::after {
@@ -4422,7 +4424,7 @@ body::after {
 }
 
 .metric:nth-child(2) {
-  background-color: #f7dce8;
+  background-color: #f8d5e5;
 }
 
 .metric:nth-child(2)::after {
@@ -4430,7 +4432,7 @@ body::after {
 }
 
 .metric:nth-child(3) {
-  background-color: #f8e9b9;
+  background-color: #fbe4b5;
 }
 
 .metric:nth-child(3)::after {
@@ -4438,7 +4440,7 @@ body::after {
 }
 
 .metric:nth-child(4) {
-  background-color: #dfe5fb;
+  background-color: #d2efea;
 }
 
 .metric:nth-child(4)::after {
@@ -4458,10 +4460,10 @@ body::after {
 .textarea,
 .activity-item,
 .preview-chat-line p {
-  border: 1px solid rgba(37, 32, 51, 0.74);
+  border: 1px solid rgba(43, 27, 53, 0.74);
   border-radius: 3px;
-  background: rgba(255, 254, 250, 0.96);
-  box-shadow: 2px 2px 0 rgba(37, 32, 51, 0.58);
+  background: rgba(255, 250, 240, 0.97);
+  box-shadow: 2px 2px 0 rgba(43, 27, 53, 0.58);
 }
 
 .select,
@@ -4490,7 +4492,7 @@ body::after {
 }
 
 .preview-panel {
-  background-color: rgba(231, 237, 247, 0.97);
+  background-color: rgba(234, 220, 240, 0.96);
 }
 
 .brand-preview-panel {
@@ -4621,7 +4623,7 @@ body::after {
 
 .studio-index-art::after {
   background:
-    linear-gradient(90deg, rgba(69, 212, 197, 0.1), transparent 45%, rgba(120, 151, 242, 0.13)),
+    linear-gradient(90deg, rgba(53, 200, 184, 0.13), transparent 45%, rgba(243, 111, 168, 0.16)),
     repeating-linear-gradient(0deg, transparent 0 3px, rgba(0, 0, 0, 0.16) 3px 4px);
 }
 
@@ -4635,7 +4637,7 @@ body::after {
   padding: 14px;
   border: 1px solid var(--ink);
   background-color: var(--paper-soft);
-  box-shadow: 4px 4px 0 rgba(37, 32, 51, 0.88);
+  box-shadow: 4px 4px 0 rgba(43, 27, 53, 0.88);
   transition:
     transform 360ms cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 360ms cubic-bezier(0.16, 1, 0.3, 1),
@@ -4648,15 +4650,15 @@ body::after {
 }
 
 .studio-index-card.tone-2 {
-  background-color: #f5dbe7;
+  background-color: #f8d5e5;
 }
 
 .studio-index-card.tone-3 {
-  background-color: #d3f0eb;
+  background-color: #ddd9fa;
 }
 
 .studio-index-card.tone-4 {
-  background-color: #f8e6b7;
+  background-color: #d5eee5;
 }
 
 .studio-index-card > img,
@@ -4690,8 +4692,8 @@ body::after {
 }
 
 .studio-card-format {
-  background: rgba(255, 253, 247, 0.9);
-  box-shadow: 2px 2px 0 rgba(37, 32, 51, 0.54);
+  background: rgba(255, 247, 232, 0.92);
+  box-shadow: 2px 2px 0 rgba(43, 27, 53, 0.54);
 }
 
 .studio-hub-return {
@@ -4707,8 +4709,8 @@ body::after {
   min-height: 100vh;
   padding: clamp(12px, 2vw, 26px);
   background:
-    linear-gradient(rgba(216, 221, 234, 0.34), rgba(184, 194, 217, 0.48)),
-    repeating-linear-gradient(0deg, transparent 0 4px, rgba(37, 32, 51, 0.04) 4px 5px);
+    linear-gradient(rgba(201, 224, 221, 0.38), rgba(169, 202, 199, 0.54)),
+    repeating-linear-gradient(0deg, transparent 0 4px, rgba(43, 27, 53, 0.04) 4px 5px);
 }
 
 .auth-frame {
@@ -4725,7 +4727,7 @@ body::after {
 .auth-topbar {
   min-height: 68px;
   border-bottom: 2px solid var(--ink);
-  background: rgba(255, 253, 247, 0.88);
+  background: rgba(255, 247, 232, 0.9);
 }
 
 .auth-grid {
@@ -4738,7 +4740,7 @@ body::after {
   padding: clamp(25px, 3.4vw, 52px);
   overflow: hidden;
   border-right: 2px solid var(--ink);
-  background-color: rgba(255, 253, 247, 0.95);
+  background-color: rgba(255, 247, 232, 0.96);
 }
 
 .auth-login-card h1 {
@@ -4771,7 +4773,7 @@ body::after {
 
 .auth-proof-grid span {
   border-radius: 2px;
-  background: #edf1fa;
+  background: #ddd9fa;
 }
 
 .auth-wide-banner {
@@ -4787,7 +4789,7 @@ body::after {
 .auth-workbench {
   padding: clamp(14px, 2vw, 28px);
   background:
-    linear-gradient(rgba(229, 235, 246, 0.86), rgba(201, 211, 230, 0.92)),
+    linear-gradient(rgba(213, 235, 231, 0.86), rgba(190, 216, 212, 0.92)),
     url("/brand/kitty-is-not-okay.jpg");
   background-position: center;
   background-size: cover;
@@ -4799,9 +4801,9 @@ body::after {
   overflow: hidden;
   border: 2px solid var(--ink);
   border-radius: 3px;
-  background-color: rgba(255, 253, 247, 0.94);
+  background-color: rgba(255, 247, 232, 0.95);
   background-image:
-    linear-gradient(90deg, rgba(255, 253, 247, 0.99), rgba(255, 253, 247, 0.88) 56%, rgba(229, 235, 246, 0.42)),
+    linear-gradient(90deg, rgba(255, 247, 232, 0.99), rgba(255, 247, 232, 0.9) 56%, rgba(221, 204, 235, 0.44)),
     url("/brand/blunt38-banner.jpg");
   background-position: center, right center;
   background-size: cover, 62% auto;
@@ -4823,8 +4825,8 @@ body::after {
   min-height: 42px;
   border: 1px solid var(--ink);
   border-radius: 3px;
-  background: rgba(255, 253, 247, 0.84);
-  box-shadow: 3px 3px 0 rgba(37, 32, 51, 0.72);
+  background: rgba(255, 247, 232, 0.86);
+  box-shadow: 3px 3px 0 rgba(43, 27, 53, 0.72);
 }
 
 .module-switch.active {
@@ -4833,15 +4835,15 @@ body::after {
 }
 
 .module-switch:nth-child(2) {
-  background: #dfe7fb;
+  background: #ddd9fa;
 }
 
 .module-switch:nth-child(3) {
-  background: #fae3a4;
+  background: #fbe2ad;
 }
 
 .module-switch:nth-child(4) {
-  background: #ded4f0;
+  background: #dcefc7;
 }
 
 .control-surface {
@@ -4855,7 +4857,7 @@ body::after {
   overflow: hidden;
   border: 2px solid var(--ink);
   border-radius: 3px;
-  background: rgba(255, 253, 247, 0.96);
+  background: rgba(255, 247, 232, 0.97);
   box-shadow: 6px 6px 0 var(--ink);
 }
 
@@ -4870,24 +4872,24 @@ body::after {
 }
 
 .event-line span {
-  background: var(--signal-cyan);
+  background: var(--signal-aqua);
 }
 
 .console-discord-card,
 .preview-deck {
-  background: #e9eef8;
+  background: #e4dff3;
 }
 
 .module-stat {
   border-radius: 2px;
-  background: #f5f1e9;
+  background: #f4ead8;
 }
 
 .auth-dock {
   margin-top: 16px;
   border: 2px solid var(--ink);
   border-radius: 3px;
-  background: rgba(255, 253, 247, 0.92);
+  background: rgba(255, 247, 232, 0.94);
   box-shadow: 5px 5px 0 var(--ink);
 }
 
@@ -4901,14 +4903,14 @@ body::after {
 
 /* Studio color system */
 .visual-studio {
-  --studio-bg: #d8e0ed;
-  --studio-pane: #fffdf7;
-  --studio-pane-soft: #edf1f8;
-  --studio-line: #3f394c;
-  --studio-line-soft: rgba(63, 57, 76, 0.3);
+  --studio-bg: #c3d9d6;
+  --studio-pane: #fff7e8;
+  --studio-pane-soft: #eee3f2;
+  --studio-line: #3b2745;
+  --studio-line-soft: rgba(59, 39, 69, 0.3);
   --studio-text: var(--ink);
-  --studio-muted: #716a7c;
-  --studio-accent: var(--signal-cyan);
+  --studio-muted: #796a80;
+  --studio-accent: var(--signal-aqua);
   --studio-mint: var(--signal-green);
   background: var(--studio-bg);
 }
@@ -4926,40 +4928,40 @@ body::after {
 .studio-preset-bar button,
 .zoom-control,
 .layer-row {
-  background: #fffefb;
+  background: #fffaef;
 }
 
 .studio-tool-button.active,
 .studio-tool-button:hover,
 .layer-row.selected {
-  background: #ccefeb;
+  background: #d9d4fa;
 }
 
 .studio-canvas-viewport {
-  background-color: #bcc8dc;
+  background-color: #acd0cb;
   background-image:
-    linear-gradient(45deg, rgba(53, 70, 104, 0.09) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(53, 70, 104, 0.09) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(53, 70, 104, 0.09) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(53, 70, 104, 0.09) 75%);
+    linear-gradient(45deg, rgba(82, 57, 96, 0.09) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(82, 57, 96, 0.09) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(82, 57, 96, 0.09) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(82, 57, 96, 0.09) 75%);
 }
 
 .studio-inspector input,
 .studio-inspector textarea,
 .studio-inspector select {
-  background: #fffefb;
+  background: #fffaef;
 }
 
 .inspector-group {
-  background: #eee8f2;
+  background: #f0dce9;
 }
 
 .studio-version-foot {
-  background: #d1d9e7;
+  background: #b8d5d1;
 }
 
 .studio-asset-strip {
-  background: #d5ddea;
+  background: #ddcfeb;
 }
 
 @keyframes signal-beam {
