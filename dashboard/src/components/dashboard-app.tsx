@@ -106,11 +106,12 @@ const tabs: Array<{ key: TabKey; label: string; icon: typeof Gauge }> = [
 ];
 
 const colorOptions = [
-  { label: "Teal", value: 0x45d4c5 },
-  { label: "Mint", value: 0x8fd39f },
-  { label: "Rose", value: 0xf18fba },
-  { label: "Gold", value: 0xf4c44f },
-  { label: "Violet", value: 0xa189cf }
+  { label: "Periwinkle", value: 0x887cf2 },
+  { label: "Aqua", value: 0x35c8b8 },
+  { label: "Bubblegum", value: 0xf36fa8 },
+  { label: "Marigold", value: 0xf3bd4f },
+  { label: "Pistachio", value: 0x9ad26b },
+  { label: "Orchid", value: 0xb079dc }
 ];
 
 const personaOptions: Array<{ key: AiPersona; label: string }> = [
@@ -137,7 +138,7 @@ const loginModules: Array<{
     command: "/ai setup",
     title: "Persona engine",
     description: "Channel-locked replies with a custom voice, fast Groq routing, and admin controls.",
-    accent: "#45d4c5",
+    accent: "#f36fa8",
     icon: Brain,
     stats: [
       { label: "Latency", value: "Fast" },
@@ -152,7 +153,7 @@ const loginModules: Array<{
     command: "/music play",
     title: "Music deck",
     description: "Lavalink playback, queue actions, loop modes, and clean controls for voice sessions.",
-    accent: "#7897f2",
+    accent: "#887cf2",
     icon: Disc3,
     stats: [
       { label: "Engine", value: "Lava" },
@@ -167,7 +168,7 @@ const loginModules: Array<{
     command: "/ticket-panel",
     title: "Support cockpit",
     description: "Private category routing, staff roles, claim flow, lock flow, and transcript actions.",
-    accent: "#f4c44f",
+    accent: "#f3bd4f",
     icon: Ticket,
     stats: [
       { label: "Panel", value: "Ready" },
@@ -182,7 +183,7 @@ const loginModules: Array<{
     command: "/leveling enable",
     title: "XP systems",
     description: "Rank tracking, leaderboard storage, announcement channels, and growth signals.",
-    accent: "#f18fba",
+    accent: "#9ad26b",
     icon: Crown,
     stats: [
       { label: "Storage", value: "SQL" },
@@ -1071,7 +1072,7 @@ function ModuleView({
               value={String(config.accentColor)}
               options={colorOptions.map((item) => ({ id: String(item.value), name: item.label }))}
               placeholder="Pick color"
-              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x45d4c5))}
+              onChange={(value) => updateConfig("accentColor", Number(value ?? 0x887cf2))}
             />
           </div>
         </section>
