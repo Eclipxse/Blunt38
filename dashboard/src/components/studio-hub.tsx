@@ -3,6 +3,7 @@
 import {
   CakeSlice,
   ChevronLeft,
+  ChevronRight,
   CirclePlay,
   DoorOpen,
   Headphones,
@@ -14,8 +15,7 @@ import {
   Ticket,
   Trophy
 } from "lucide-react";
-import { animate, stagger } from "animejs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { VisualStudio } from "@/components/welcome-studio";
 import {
@@ -38,17 +38,6 @@ const icons = {
   moderation: ShieldAlert
 } satisfies Record<VisualStudioType, typeof Sparkles>;
 
-const artByStudio: Partial<Record<VisualStudioType, string>> = {
-  welcome: "/brand/blunt38-banner.jpg",
-  goodbye: "/brand/kitty-is-not-okay.jpg",
-  music: "/brand/drugs-dont-work.jpg",
-  rank: "/brand/blunt38-banner.jpg",
-  "level-up": "/brand/kitty-is-not-okay.jpg",
-  birthday: "/brand/kitty-is-not-okay.jpg",
-  announcement: "/brand/blunt38-banner.jpg",
-  moderation: "/brand/drugs-dont-work.jpg"
-};
-
 export function StudioHub({
   guildId,
   guildName
@@ -56,48 +45,27 @@ export function StudioHub({
   guildId: string;
   guildName: string;
 }) {
-  const hubRef = useRef<HTMLDivElement | null>(null);
-  const [selectedType, setSelectedType] = useState<VisualStudioType | null>(null);
+  const [selectedType, setSelectedType] = useState<VisualStudioType | null>(
+    null
+  );
   const selected = useMemo(
     () => (selectedType ? getVisualStudioDefinition(selectedType) : null),
     [selectedType]
   );
 
-  useEffect(() => {
-    const root = hubRef.current;
-    if (!root || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-
-    const targets = selectedType
-      ? root.querySelectorAll<HTMLElement>(".studio-hub-return, .visual-studio")
-      : root.querySelectorAll<HTMLElement>(".studio-index-hero, .studio-index-card");
-    const entrance = animate(targets, {
-      opacity: [0, 1],
-      y: [16, 0],
-      scale: [0.99, 1],
-      delay: stagger(selectedType ? 70 : 42),
-      duration: 560,
-      ease: "outExpo"
-    });
-
-    return () => {
-      entrance.revert();
-    };
-  }, [selectedType]);
-
   if (selected) {
     return (
-      <div className="studio-hub editor-open" ref={hubRef}>
-        <div className="studio-hub-return">
+      <div className="minimal-studio-editor">
+        <header>
           <button type="button" onClick={() => setSelectedType(null)}>
             <ChevronLeft size={17} />
-            Studio index
+            All studios
           </button>
           <div>
             <span>{selected.eyebrow}</span>
-            <strong>{selected.label} Studio</strong>
+            <strong>{selected.label}</strong>
           </div>
-          <small>{selected.description}</small>
-        </div>
+        </header>
         <VisualStudio
           guildId={guildId}
           guildName={guildName}
@@ -108,57 +76,29 @@ export function StudioHub({
   }
 
   return (
-    <div className="studio-hub" ref={hubRef}>
-      <section className="studio-index-hero">
-        <div className="studio-index-copy">
-          <span className="pixel-kicker">VISUAL SYSTEM / 11 MODULES</span>
-          <h3>Make every bot message feel like it came from the same little universe.</h3>
-          <p>
-            Pick a surface, use a preset, or build it from layers. Every publish is
-            versioned per server.
-          </p>
-          <div className="studio-index-status">
-            <span>SUPABASE SYNC</span>
-            <span>VARIABLES LIVE</span>
-            <span>PNG RENDERER</span>
-          </div>
-          <div className="studio-signal-line" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-        <figure className="studio-index-art">
-          <img src="/brand/drugs-dont-work.jpg" alt="Pixel girl artwork" />
-          <figcaption>signal 038 / graphics online</figcaption>
-        </figure>
-      </section>
+    <div className="minimal-page minimal-studio-index">
+      <header className="minimal-page-heading">
+        <span className="minimal-eyebrow">Studio</span>
+        <h1>Message design</h1>
+        <p>Choose one Discord surface to edit.</p>
+      </header>
 
-      <section className="studio-index-grid">
-        {visualStudioCatalog.map((studio, index) => {
+      <section className="studio-module-list">
+        {visualStudioCatalog.map((studio) => {
           const Icon = icons[studio.type];
-          const art = artByStudio[studio.type];
           return (
             <button
-              className={`studio-index-card tone-${(index % 4) + 1}`}
               key={studio.type}
               type="button"
               onClick={() => setSelectedType(studio.type)}
             >
-              <span className="studio-card-number">{String(index + 1).padStart(2, "0")}</span>
-              {art ? <img src={art} alt="" /> : <span className="studio-card-pattern" />}
-              <span className="studio-card-icon">
-                <Icon size={19} />
-              </span>
-              <span className="studio-card-copy">
-                <small>{studio.eyebrow}</small>
+              <Icon size={18} />
+              <span>
                 <strong>{studio.label}</strong>
-                <span>{studio.description}</span>
+                <small>{studio.description}</small>
               </span>
-              <span className="studio-card-format">{studio.format}</span>
+              <code>{studio.format}</code>
+              <ChevronRight size={17} />
             </button>
           );
         })}
