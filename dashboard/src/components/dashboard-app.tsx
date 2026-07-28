@@ -18,6 +18,10 @@ import { DashboardLogin } from "@/components/dashboard-login";
 import { DashboardSignalBackdrop } from "@/components/signal-effects";
 import { StudioHub } from "@/components/studio-hub";
 import {
+  signal38,
+  type WatcherMode
+} from "@/components/watcher-38";
+import {
   HomeView,
   AutomationsView,
   MusicView,
@@ -166,11 +170,13 @@ export function DashboardApp() {
 
       setMe(nextMe);
       setSelectedGuildId(initialGuild);
+      signal38("return");
     } catch {
       setMe(null);
       setError(
         "Could not reach the dashboard API. Check the service and try again."
       );
+      signal38("save-error");
     } finally {
       setLoading(false);
     }
@@ -240,6 +246,24 @@ export function DashboardApp() {
     if (view !== "studio") setStudioFocused(false);
   }, [view]);
 
+  useEffect(() => {
+    let mode: WatcherMode = "loading";
+
+    if (!loading && !me) {
+      mode = "login";
+    } else if (me?.guilds.length === 0) {
+      mode = "empty";
+    } else if (studioFocused) {
+      mode = "studio-focus";
+    } else if (view === "home") {
+      mode = "dashboard";
+    } else {
+      mode = view;
+    }
+
+    signal38("context", { mode, silent: true });
+  }, [loading, me, studioFocused, view]);
+
   const updateConfig: ConfigUpdater = (key, value) => {
     setPayload((current) => {
       if (!current) return current;
@@ -268,6 +292,7 @@ export function DashboardApp() {
 
       if (!response.ok) {
         setError("Save failed. Check Supabase and bot access.");
+        signal38("save-error");
         return;
       }
 
@@ -277,8 +302,10 @@ export function DashboardApp() {
       );
       setSavedConfig(structuredClone(result.config));
       setDirty(false);
+      signal38("save-success");
     } catch {
       setError("Save failed because the dashboard API could not be reached.");
+      signal38("save-error");
     } finally {
       setSaving(false);
     }
@@ -292,6 +319,7 @@ export function DashboardApp() {
         : current
     );
     setDirty(false);
+    signal38("discard");
   }
 
   function confirmNavigation() {
@@ -308,6 +336,7 @@ export function DashboardApp() {
     setAutomation(null);
     setPreviewOpen(false);
     updateRoute(nextView, null);
+    signal38("navigate", { subject: nextView });
   }
 
   function openAutomation(key: AutomationKey) {
@@ -317,6 +346,7 @@ export function DashboardApp() {
     setAutomation(key);
     setPreviewOpen(false);
     updateRoute("automations", key);
+    signal38("navigate", { subject: key });
   }
 
   function selectAutomation(key: AutomationKey | null) {
@@ -325,6 +355,7 @@ export function DashboardApp() {
     setAutomation(key);
     setPreviewOpen(false);
     updateRoute("automations", key);
+    signal38("navigate", { subject: key ?? "automations" });
   }
 
   function changeGuild(guildId: string) {
@@ -332,6 +363,7 @@ export function DashboardApp() {
     if (dirty) discardChanges();
     setSelectedGuildId(guildId);
     setPreviewOpen(false);
+    signal38("guild-change");
   }
 
   async function logout() {

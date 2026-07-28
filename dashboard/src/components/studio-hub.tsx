@@ -18,6 +18,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { VisualStudio } from "@/components/welcome-studio";
+import { signal38 } from "@/components/watcher-38";
 import {
   getVisualStudioDefinition,
   visualStudioCatalog,
@@ -60,11 +61,21 @@ export function StudioHub({
     return () => onFocusChange?.(false);
   }, [onFocusChange, selectedType]);
 
+  function openStudio(type: VisualStudioType) {
+    setSelectedType(type);
+    signal38("studio-open", { mode: "studio-focus" });
+  }
+
+  function closeStudio() {
+    setSelectedType(null);
+    signal38("studio-exit", { mode: "studio" });
+  }
+
   if (selected) {
     return (
       <div className="minimal-studio-editor">
         <header>
-          <button type="button" onClick={() => setSelectedType(null)}>
+          <button type="button" onClick={closeStudio}>
             <ChevronLeft size={17} />
             Exit studio
           </button>
@@ -97,7 +108,7 @@ export function StudioHub({
             <button
               key={studio.type}
               type="button"
-              onClick={() => setSelectedType(studio.type)}
+              onClick={() => openStudio(studio.type)}
             >
               <Icon size={18} />
               <span>

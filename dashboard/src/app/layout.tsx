@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, IBM_Plex_Mono, Silkscreen } from "next/font/google";
 import { MotionProvider } from "@/components/motion-provider";
 import { TitleSignal } from "@/components/title-signal";
+import { Watcher38 } from "@/components/watcher-38";
 import "./globals.css";
 
 const display = Silkscreen({
@@ -72,7 +73,10 @@ export default function RootLayout({
     <html lang="en" className={`${display.variable} ${round.variable} ${geistMono.variable}`}>
       <body>
         <TitleSignal />
-        <MotionProvider>{children}</MotionProvider>
+        <MotionProvider>
+          <Watcher38 />
+          {children}
+        </MotionProvider>
       </body>
     </html>
   );

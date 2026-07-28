@@ -1,19 +1,25 @@
 "use client";
 
 import { ArrowRight, LockKeyhole } from "lucide-react";
+import { useEffect } from "react";
 
 import {
-  AsciiBanner,
   DotShift,
   ParticleWord
 } from "@/components/signal-effects";
+import { signal38 } from "@/components/watcher-38";
 
 export function DashboardLogin({ error }: { error: string | null }) {
+  useEffect(() => {
+    signal38("context", { mode: "login", silent: true });
+    const timer = window.setTimeout(() => signal38("login"), 720);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <main className="minimal-login">
       <div className="login-signal-field" aria-hidden="true">
         <DotShift className="login-dot-shift" color="#aaa2ef" spacing={24} />
-        <AsciiBanner className="login-ascii-banner" />
         <ParticleWord className="login-particle-word" text="BLUNT38" />
       </div>
       <div className="minimal-login-shade" />
@@ -32,7 +38,12 @@ export function DashboardLogin({ error }: { error: string | null }) {
 
         {error ? <div className="minimal-login-error">{error}</div> : null}
 
-        <a className="minimal-login-button" href="/api/auth/login">
+        <a
+          className="minimal-login-button"
+          href="/api/auth/login"
+          onFocus={() => signal38("connect-hover")}
+          onMouseEnter={() => signal38("connect-hover")}
+        >
           <LockKeyhole size={17} />
           Connect Discord
           <ArrowRight size={17} />

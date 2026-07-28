@@ -407,7 +407,6 @@ export function DashboardSignalBackdrop() {
   return (
     <div className="dashboard-signal-backdrop" aria-hidden="true">
       <DotShift className="dashboard-dot-shift" color="#948ce8" />
-      <AsciiBanner className="dashboard-ascii-banner" />
       <span className="signal-code">38 / NONE EXPLAINED / SIGNAL LIVE</span>
     </div>
   );
