@@ -2,35 +2,79 @@
 
 import { useEffect } from "react";
 
-const titleFrames = [
-  "blunt38 [....]",
-  "blunt38 [=...]",
-  "blunt38 [.==.]",
-  "blunt38 [...=]",
-  "blunt38 [LIVE]",
-  "blunt38 // watching"
-];
+const bootTitle = "blunt38 // signal acquired";
+
+function adaptiveTitle(signal: string | undefined) {
+  if (signal?.startsWith("studio:")) {
+    const studio = signal.slice("studio:".length).replaceAll("-", " ");
+    return `${studio} studio // blunt38`;
+  }
+
+  const titles: Record<string, string> = {
+    login: "blunt38 // awaiting login",
+    syncing: "blunt38 // syncing...",
+    lost: "blunt38 // signal lost",
+    publishing: "blunt38 // publishing...",
+    unsaved: "* unsaved // blunt38",
+    home: "blunt38 // signal live",
+    automations: "automations // blunt38",
+    music: "music deck // blunt38",
+    studio: "studio // blunt38"
+  };
+
+  return titles[signal ?? ""] ?? "blunt38 // control signal";
+}
 
 export function TitleSignal() {
   useEffect(() => {
+    const root = document.documentElement;
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
     );
+    let booting = !reducedMotion.matches;
+    let character = 0;
+    let timeout = 0;
 
-    if (reducedMotion.matches) {
-      document.title = "blunt38 // control signal";
-      return;
+    const applyAdaptiveTitle = () => {
+      if (!booting) {
+        document.title = adaptiveTitle(root.dataset.titleSignal);
+      }
+    };
+
+    const observer = new MutationObserver(applyAdaptiveTitle);
+    observer.observe(root, {
+      attributes: true,
+      attributeFilter: ["data-title-signal"]
+    });
+
+    if (!booting) {
+      applyAdaptiveTitle();
+      return () => observer.disconnect();
     }
 
-    let frame = 0;
-    document.title = titleFrames[frame];
+    const typeNextCharacter = () => {
+      character += 1;
+      document.title = `${bootTitle.slice(0, character)}_`;
 
-    const interval = window.setInterval(() => {
-      frame = (frame + 1) % titleFrames.length;
-      document.title = titleFrames[frame];
-    }, 720);
+      if (character < bootTitle.length) {
+        timeout = window.setTimeout(typeNextCharacter, 58);
+        return;
+      }
 
-    return () => window.clearInterval(interval);
+      document.title = bootTitle;
+      timeout = window.setTimeout(() => {
+        booting = false;
+        applyAdaptiveTitle();
+      }, 420);
+    };
+
+    document.title = "_";
+    timeout = window.setTimeout(typeNextCharacter, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+      observer.disconnect();
+    };
   }, []);
 
   return null;
