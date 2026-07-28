@@ -31,6 +31,7 @@ import type {
 } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { signal38 } from "@/components/watcher-38";
 import {
   createAvatarElement,
   createDefaultVisualDocument,
@@ -304,6 +305,7 @@ export function VisualStudio({
     setHistoryIndex(nextIndex);
     setDocument(cloneDocument(history[nextIndex]));
     setDirty(true);
+    signal38("studio-undo");
   }
 
   function redo() {
@@ -330,8 +332,10 @@ export function VisualStudio({
       setVersions(payload.versions);
       setPersistedVersion(payload.template.version);
       setMessage(`Version ${payload.template.version} is live.`);
+      signal38("studio-save");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Save failed.");
+      signal38("save-error");
     } finally {
       setSaving(false);
     }
