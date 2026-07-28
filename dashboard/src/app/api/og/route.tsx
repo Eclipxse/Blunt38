@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { ImageResponse } from "next/og";
 
 export const runtime = "nodejs";
@@ -19,16 +21,12 @@ const wordmark = Array.from({ length: 7 }, (_, row) =>
     .join(" ")
 );
 
-const signalNoise = [
-  "..:: 38 ::..",
-  "/// SIGNAL LOCKED ///",
-  "[ AI ] [ MUSIC ] [ STUDIO ]",
-  "01100010 00110011 00111000",
-  "NONE EXPLAINED",
-  "///// ONLINE /////"
-];
-
 export async function GET() {
+  const banner = await readFile(
+    join(process.cwd(), "public", "brand", "blunt38-banner.jpg")
+  );
+  const bannerSource = `data:image/jpeg;base64,${banner.toString("base64")}`;
+
   return new ImageResponse(
     (
       <div
@@ -38,26 +36,137 @@ export async function GET() {
           display: "flex",
           position: "relative",
           overflow: "hidden",
-          color: "#f1e8f3",
-          background:
-            "linear-gradient(135deg, #09070c 0%, #130e18 48%, #09070c 100%)",
+          color: "#3d274a",
+          background: "#d8c2d9",
           fontFamily: "monospace"
         }}
       >
-        {Array.from({ length: 32 }, (_, index) => (
+        <img
+          alt=""
+          src={bannerSource}
+          width="1200"
+          height="480"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "1200px",
+            height: "480px",
+            objectFit: "cover"
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: "476px",
+            left: 0,
+            width: "1200px",
+            height: "154px",
+            display: "flex",
+            background: "#d7c1d8",
+            borderTop: "4px solid #62416f"
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            top: "495px",
+            left: "45px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "1px"
+          }}
+        >
+          {wordmark.map((row, rowIndex) => (
+            <div
+              key={rowIndex}
+              style={{
+                height: "16px",
+                display: "flex"
+              }}
+            >
+              {row.split("").map((character, columnIndex) => (
+                <div
+                  key={`${rowIndex}-${columnIndex}`}
+                  style={{
+                    width: "12px",
+                    height: "17px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: columnIndex > 29 ? "#8e4c78" : "#4b3159",
+                    fontSize: "18px",
+                    fontWeight: 700
+                  }}
+                >
+                  {character === "#" ? "#" : " "}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        <div
+          style={{
+            position: "absolute",
+            top: "500px",
+            left: "670px",
+            width: "470px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end"
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              color: "#5d3c6a",
+              fontSize: "34px",
+              letterSpacing: "1px"
+            }}
+          >
+            blunt38.
+          </div>
+          <div
+            style={{
+              display: "flex",
+              marginTop: "9px",
+              color: "#875f8d",
+              fontSize: "16px",
+              letterSpacing: "2px"
+            }}
+          >
+            DISCORD CONTROL CENTER
+          </div>
+          <div
+            style={{
+              display: "flex",
+              marginTop: "13px",
+              color: "#9c769d",
+              fontSize: "14px",
+              letterSpacing: "1px"
+            }}
+          >
+            panel.eclipxse.in
+          </div>
+        </div>
+
+        {Array.from({ length: 42 }, (_, index) => (
           <div
             key={index}
             style={{
               position: "absolute",
+              top: `${index * 15}px`,
               left: 0,
-              right: 0,
-              top: `${index * 20}px`,
+              width: "1200px",
               height: "1px",
               display: "flex",
               background:
-                index % 4 === 0
-                  ? "rgba(219, 115, 158, 0.13)"
-                  : "rgba(238, 228, 215, 0.045)"
+                index % 5 === 0
+                  ? "rgba(70, 36, 81, 0.12)"
+                  : "rgba(255, 255, 255, 0.08)"
             }}
           />
         ))}
@@ -65,248 +174,11 @@ export async function GET() {
         <div
           style={{
             position: "absolute",
-            top: "-135px",
-            right: "-85px",
-            width: "490px",
-            height: "490px",
+            inset: "12px",
             display: "flex",
-            border: "1px solid rgba(170, 162, 239, 0.24)",
-            borderRadius: "245px"
+            border: "3px solid rgba(72, 42, 86, 0.75)"
           }}
         />
-        <div
-          style={{
-            position: "absolute",
-            top: "-77px",
-            right: "-27px",
-            width: "374px",
-            height: "374px",
-            display: "flex",
-            border: "1px solid rgba(83, 201, 184, 0.18)",
-            borderRadius: "187px"
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            top: "34px",
-            left: "34px",
-            width: "1132px",
-            height: "562px",
-            display: "flex",
-            border: "2px solid #675275",
-            boxShadow: "10px 10px 0 #24172b"
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: "-8px",
-              left: "24px",
-              display: "flex",
-              padding: "0 10px",
-              color: "#53c9b8",
-              background: "#09070c",
-              fontSize: "17px",
-              letterSpacing: "2px"
-            }}
-          >
-            BLUNT38 CONTROL SIGNAL
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: "70px",
-              left: "62px",
-              display: "flex",
-              flexDirection: "column"
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                color: "#db739e",
-                fontSize: "18px",
-                letterSpacing: "3px"
-              }}
-            >
-              &gt; IDENTITY HANDSHAKE COMPLETE
-            </div>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                marginTop: "25px",
-                gap: "1px"
-              }}
-            >
-              {wordmark.map((row, rowIndex) => (
-                <div
-                  key={rowIndex}
-                  style={{
-                    display: "flex",
-                    height: "31px"
-                  }}
-                >
-                  {row.split("").map((character, columnIndex) => (
-                    <div
-                      key={`${rowIndex}-${columnIndex}`}
-                      style={{
-                        width: "17px",
-                        height: "31px",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color:
-                          columnIndex > 29
-                            ? "#db739e"
-                            : rowIndex % 2 === 0
-                              ? "#f1e8f3"
-                              : "#c9bbd3",
-                        fontSize: "27px",
-                        fontWeight: 700,
-                        textShadow:
-                          character === "#" ? "3px 2px 0 #50385d" : "none"
-                      }}
-                    >
-                      {character === "#" ? "#" : " "}
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginTop: "22px",
-                gap: "13px"
-              }}
-            >
-              <div
-                style={{
-                  width: "11px",
-                  height: "11px",
-                  display: "flex",
-                  borderRadius: "50%",
-                  background: "#53c9b8",
-                  boxShadow: "0 0 20px #53c9b8"
-                }}
-              />
-              <div
-                style={{
-                  display: "flex",
-                  color: "#aaa2ef",
-                  fontSize: "19px",
-                  letterSpacing: "2px"
-                }}
-              >
-                AI / MUSIC / AUTOMATION / STUDIO
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: "95px",
-              left: "845px",
-              width: "245px",
-              display: "flex",
-              flexDirection: "column",
-              gap: "13px",
-              opacity: 0.68
-            }}
-          >
-            {signalNoise.map((line, index) => (
-              <div
-                key={line}
-                style={{
-                  display: "flex",
-                  justifyContent: index % 2 === 0 ? "flex-start" : "flex-end",
-                  color:
-                    index % 3 === 0
-                      ? "#db739e"
-                      : index % 3 === 1
-                        ? "#aaa2ef"
-                        : "#53c9b8",
-                  fontSize: "13px",
-                  letterSpacing: "1px"
-                }}
-              >
-                {line}
-              </div>
-            ))}
-          </div>
-
-          <div
-            style={{
-              position: "absolute",
-              top: "456px",
-              left: "62px",
-              width: "1024px",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-end",
-              paddingTop: "19px",
-              borderTop: "1px solid rgba(170, 162, 239, 0.34)"
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                color: "#f1e8f3"
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: "25px",
-                  letterSpacing: "1px"
-                }}
-              >
-                38 reasons.
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  marginTop: "4px",
-                  color: "#db739e",
-                  fontSize: "25px",
-                  letterSpacing: "1px"
-                }}
-              >
-                none explained.
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                color: "#9385a0",
-                fontSize: "16px",
-                letterSpacing: "1px"
-              }}
-            >
-              panel.eclipxse.in // 07:38:38
-            </div>
-          </div>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            top: "30px",
-            right: "58px",
-            display: "flex",
-            color: "#db739e",
-            fontSize: "15px"
-          }}
-        >
-          REC ●
-        </div>
       </div>
     ),
     {
