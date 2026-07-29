@@ -24,6 +24,8 @@ type GuildConfigRow = {
   guild_id: string;
   welcome_channel_id: string | null;
   welcome_message: string | null;
+  goodbye_channel_id: string | null;
+  goodbye_message: string | null;
   log_channel_id: string | null;
   ticket_category_id: string | null;
   support_role_id: string | null;
@@ -118,6 +120,8 @@ function toGuildConfig(row: GuildConfigRow): GuildConfig {
     guildId: row.guild_id,
     welcomeChannelId: row.welcome_channel_id ?? undefined,
     welcomeMessage: row.welcome_message ?? undefined,
+    goodbyeChannelId: row.goodbye_channel_id ?? undefined,
+    goodbyeMessage: row.goodbye_message ?? undefined,
     logChannelId: row.log_channel_id ?? undefined,
     ticketCategoryId: row.ticket_category_id ?? undefined,
     supportRoleId: row.support_role_id ?? undefined,
@@ -267,19 +271,25 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
     const next = { ...(await getGuildConfig(guildId)), ...patch, guildId };
     await query(
       `insert into public.guild_configs (
-        guild_id, welcome_channel_id, welcome_message, log_channel_id, ticket_category_id, support_role_id,
-        verified_role_id, auto_role_id, temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id,
-        last_birthday_run, leveling_enabled, level_up_channel_id, starboard_channel_id, starboard_threshold,
-        ai_responder_enabled, ai_responder_channel_id, ai_responder_prompt, ai_responder_persona, accent_color
+        guild_id, welcome_channel_id, welcome_message, goodbye_channel_id, goodbye_message,
+        log_channel_id, ticket_category_id, support_role_id, verified_role_id, auto_role_id,
+        temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id, last_birthday_run,
+        leveling_enabled, level_up_channel_id, starboard_channel_id, starboard_threshold,
+        ai_responder_enabled, ai_responder_channel_id, ai_responder_prompt, ai_responder_persona,
+        accent_color
       ) values (
-        $1, $2, $3, $4, $5, $6,
-        $7, $8, $9, $10, $11,
-        $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21
+        $1, $2, $3, $4, $5,
+        $6, $7, $8, $9, $10,
+        $11, $12, $13, $14,
+        $15, $16, $17, $18,
+        $19, $20, $21, $22,
+        $23
       )
       on conflict (guild_id) do update set
         welcome_channel_id = excluded.welcome_channel_id,
         welcome_message = excluded.welcome_message,
+        goodbye_channel_id = excluded.goodbye_channel_id,
+        goodbye_message = excluded.goodbye_message,
         log_channel_id = excluded.log_channel_id,
         ticket_category_id = excluded.ticket_category_id,
         support_role_id = excluded.support_role_id,
@@ -302,6 +312,8 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         guildId,
         nullable(next.welcomeChannelId),
         nullable(next.welcomeMessage),
+        nullable(next.goodbyeChannelId),
+        nullable(next.goodbyeMessage),
         nullable(next.logChannelId),
         nullable(next.ticketCategoryId),
         nullable(next.supportRoleId),

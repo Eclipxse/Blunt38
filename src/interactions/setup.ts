@@ -44,6 +44,7 @@ export async function setupHomePayload(guildId: string): Promise<InteractionRepl
         .addFields(
           compactFields([
             { name: "Welcome Channel", value: mentionChannel(config.welcomeChannelId), inline: true },
+            { name: "Goodbye Channel", value: mentionChannel(config.goodbyeChannelId), inline: true },
             { name: "Log Channel", value: mentionChannel(config.logChannelId), inline: true },
             { name: "Ticket Category", value: mentionChannel(config.ticketCategoryId), inline: true },
             { name: "Support Role", value: mentionRole(config.supportRoleId), inline: true },
@@ -82,6 +83,12 @@ async function channelsPayload(guildId: string): Promise<InteractionUpdateOption
         new ChannelSelectMenuBuilder()
           .setCustomId("setup:select:welcome_channel")
           .setPlaceholder("Pick the welcome channel")
+          .addChannelTypes(ChannelType.GuildText)
+      ),
+      new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
+        new ChannelSelectMenuBuilder()
+          .setCustomId("setup:select:goodbye_channel")
+          .setPlaceholder("Pick the goodbye channel")
           .addChannelTypes(ChannelType.GuildText)
       ),
       new ActionRowBuilder<ChannelSelectMenuBuilder>().addComponents(
@@ -185,6 +192,8 @@ export async function handleSetupComponent(
     if (interaction.customId === "setup:reset") {
       await updateGuildConfig(interaction.guildId, {
         welcomeChannelId: undefined,
+        goodbyeChannelId: undefined,
+        goodbyeMessage: undefined,
         logChannelId: undefined,
         ticketCategoryId: undefined,
         supportRoleId: undefined,
@@ -208,6 +217,10 @@ export async function handleSetupComponent(
     const selected = interaction.values[0];
     if (interaction.customId === "setup:select:welcome_channel") {
       await updateGuildConfig(interaction.guildId, { welcomeChannelId: selected });
+      return interaction.update(await channelsPayload(interaction.guildId));
+    }
+    if (interaction.customId === "setup:select:goodbye_channel") {
+      await updateGuildConfig(interaction.guildId, { goodbyeChannelId: selected });
       return interaction.update(await channelsPayload(interaction.guildId));
     }
     if (interaction.customId === "setup:select:log_channel") {

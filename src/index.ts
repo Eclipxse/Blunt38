@@ -13,12 +13,12 @@ import { handleInteraction } from "./interactions/index.js";
 import { startBirthdayScheduler } from "./services/birthdays.js";
 import { startDrawGameServer, stopDrawGameServer } from "./services/draw-game.js";
 import { startGiveawayScheduler } from "./services/giveaways.js";
+import { buildGoodbyeMessage } from "./services/goodbye.js";
 import { handleMessageCreate } from "./services/messages.js";
 import { handleMusicRaw, initMusic } from "./services/music.js";
 import { handleStarboardReaction } from "./services/starboard.js";
 import { getGuildConfig } from "./services/store.js";
 import { handleTempVoice } from "./services/temp-voice.js";
-import { buildVisualAttachment } from "./services/visual-message.js";
 import { buildWelcomeMessage } from "./services/welcome.js";
 
 dns.setDefaultResultOrder("ipv4first");
@@ -142,34 +142,20 @@ client.on(Events.MessageReactionAdd, (reaction, user) => {
 client.on(Events.GuildMemberRemove, async (member) => {
   try {
     const config = await getGuildConfig(member.guild.id);
-    if (!config.welcomeChannelId) return;
+    if (!config.goodbyeChannelId) return;
 
-    const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
+    const channel = await member.guild.channels
+      .fetch(config.goodbyeChannelId)
+      .catch(() => null);
     if (!channel?.isTextBased() || channel.isDMBased()) return;
 
-    const attachment = await buildVisualAttachment({
-      guildId: member.guild.id,
-      studioType: "goodbye",
-      user: member.user,
-      variables: {
-        user: member.displayName,
-        mention: `@${member.user.username}`,
-        server: member.guild.name,
-        membercount: member.guild.memberCount.toLocaleString("en-US"),
-        count: member.guild.memberCount.toLocaleString("en-US")
-      },
-      fileName: "goodbye"
-    }).catch((error) => {
-      console.error("Visual goodbye render failed:", error);
-      return null;
-    });
-
-    if (attachment) {
-      await channel.send({
-        content: `**${member.displayName}** left **${member.guild.name}**.`,
-        files: [attachment]
-      }).catch(() => null);
-    }
+    await channel.send(
+      await buildGoodbyeMessage(
+        member,
+        config.goodbyeMessage,
+        config.accentColor
+      )
+    );
   } catch (error) {
     console.error("Guild member remove handler failed:", error);
   }

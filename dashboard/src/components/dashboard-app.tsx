@@ -57,6 +57,7 @@ const primaryViews = new Set<PrimaryView>([
 const automationKeys = new Set<AutomationKey>([
   "ai",
   "welcome",
+  "goodbye",
   "roles",
   "tickets",
   "levels",
@@ -556,6 +557,7 @@ export function DashboardApp() {
           channels={channels}
           roles={roles}
           guildName={selectedGuild?.name ?? "your server"}
+          automation={view === "automations" ? automation : null}
           onClose={() => setPreviewOpen(false)}
         />
       ) : null}
