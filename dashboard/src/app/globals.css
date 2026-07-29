@@ -7932,15 +7932,7 @@ body::after {
 }
 
 .girl-signal[data-mode="studio-focus"] {
-  --signal-opacity: 0.22;
-  right: 8px;
-  bottom: 7px;
-  width: 156px;
-}
-
-.girl-signal[data-mode="studio-focus"] .girl-signal-caption {
-  right: 82%;
-  bottom: 24%;
+  display: none;
 }
 
 .girl-signal[data-channel="static"] {
