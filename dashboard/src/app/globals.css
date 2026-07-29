@@ -7061,8 +7061,8 @@ body::after {
 
 .watcher38-caption {
   position: absolute;
-  right: 72%;
-  bottom: 27%;
+  right: 70%;
+  bottom: 62%;
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
   align-items: center;
@@ -7153,8 +7153,8 @@ body::after {
 }
 
 .watcher38[data-mode="login"] .watcher38-caption {
-  right: 76%;
-  bottom: 26%;
+  right: 82%;
+  bottom: 48%;
   width: 245px;
 }
 
