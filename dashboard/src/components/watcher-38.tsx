@@ -66,7 +66,6 @@ type MotionValue = {
 const SIGNAL_NAME = "blunt38:watcher";
 const INK = "#34213f";
 const SKIN = "#cdb9ca";
-const LIGHT = "#eadce5";
 
 const reactions: Record<
   Exclude<WatcherAction, "context" | "navigate">,
@@ -293,16 +292,16 @@ function createPixelPortrait(image: HTMLImageElement) {
   const sourceImage = sourceContext.getImageData(0, 0, width, height);
   const output = sourceContext.createImageData(width, height);
   const torso = [
-    [0.31, 0.59],
-    [0.18, 0.7],
+    [0.32, 0.68],
+    [0.2, 0.73],
     [0.075, 0.85],
     [0.025, 1],
-    [0.76, 1],
-    [0.72, 0.84],
-    [0.65, 0.69],
-    [0.61, 0.59],
-    [0.51, 0.67],
-    [0.38, 0.66]
+    [0.735, 1],
+    [0.7, 0.86],
+    [0.63, 0.74],
+    [0.58, 0.68],
+    [0.5, 0.71],
+    [0.39, 0.7]
   ] as Array<[number, number]>;
   const darkPixels = new Uint8Array(width * height);
   const visited = new Uint8Array(width * height);
@@ -372,10 +371,10 @@ function createPixelPortrait(image: HTMLImageElement) {
     const ink = Math.max(0, Math.min(1, (174 - luminance) / 62));
     const face = ellipseMask(x, y, 0.5, 0.405, 0.285, 0.245, 0.045);
     const neck = pointInPolygon(x, y, [
-      [0.38, 0.56],
-      [0.63, 0.56],
-      [0.69, 0.73],
-      [0.31, 0.73]
+      [0.39, 0.575],
+      [0.585, 0.575],
+      [0.615, 0.72],
+      [0.345, 0.72]
     ])
       ? 1
       : 0;
@@ -632,11 +631,11 @@ export function Watcher38() {
       const eyeLookX =
         lookX.value * width * (expressionNow === "doubt" ? -0.006 : 0.009);
       const eyeLookY = lookY.value * height * 0.006;
-      const narrowed =
-        expressionNow === "annoyed" || expressionNow === "doubt" ? 0.55 : 1;
-      const open = Math.max(0.035, openness * narrowed);
+      const annoyed =
+        expressionNow === "annoyed" || expressionNow === "doubt";
+      const open = Math.max(0.035, openness);
 
-      if (open < 0.12) {
+      if (open < 0.55) {
         context.fillStyle = SKIN;
         context.beginPath();
         context.ellipse(
@@ -663,68 +662,30 @@ export function Watcher38() {
         return;
       }
 
-      if (open < 0.94) {
-        context.fillStyle = SKIN;
-        context.beginPath();
-        context.ellipse(
-          centerX,
-          centerY,
-          eyeWidth * 0.78,
-          eyeHeight * 0.72,
-          0,
-          0,
-          Math.PI * 2
-        );
-        context.fill();
-
-        context.fillStyle = INK;
-        context.beginPath();
-        context.ellipse(
-          centerX,
-          centerY,
-          eyeWidth * 0.48,
-          eyeHeight * 0.48 * open,
-          0,
-          0,
-          Math.PI * 2
-        );
-        context.fill();
-      } else if (narrowed < 0.8) {
+      if (annoyed) {
         context.fillStyle = SKIN;
         context.fillRect(
-          centerX - eyeWidth * 0.67,
+          centerX - eyeWidth * 0.62,
           centerY - eyeHeight * 0.72,
-          eyeWidth * 1.34,
-          eyeHeight * (1 - narrowed) * 0.68
+          eyeWidth * 1.24,
+          eyeHeight * 0.2
         );
       }
 
-      context.fillStyle = "rgba(118, 86, 129, 0.72)";
-      context.beginPath();
-      context.ellipse(
-        centerX + eyeLookX,
-        centerY + eyeLookY,
-        eyeWidth * 0.16,
-        eyeHeight * 0.2 * open,
-        0,
-        0,
-        Math.PI * 2
-      );
-      context.fill();
-
-      context.fillStyle = LIGHT;
+      context.fillStyle = "rgba(234, 220, 229, 0.78)";
       context.beginPath();
       context.arc(
-        centerX + eyeLookX - eyeWidth * 0.09,
-        centerY + eyeLookY - eyeHeight * 0.11,
-        Math.max(1.1, width * 0.0048),
+        centerX + eyeLookX,
+        centerY + eyeLookY - eyeHeight * 0.08,
+        Math.max(1, width * 0.0034),
         0,
         Math.PI * 2
       );
       context.fill();
 
       context.strokeStyle = INK;
-      context.lineWidth = Math.max(1.4, width * 0.0038);
+      context.globalAlpha = annoyed ? 0.88 : 0.56;
+      context.lineWidth = Math.max(1.2, width * 0.0032);
       context.beginPath();
       const browY = centerY - eyeHeight * 0.75;
       const browTilt =
@@ -738,14 +699,15 @@ export function Watcher38() {
               : 0.04
             : 0;
       context.moveTo(
-        centerX - eyeWidth * 0.42,
+        centerX - eyeWidth * 0.31,
         browY - eyeHeight * browTilt
       );
       context.lineTo(
-        centerX + eyeWidth * 0.42,
+        centerX + eyeWidth * 0.31,
         browY + eyeHeight * browTilt
       );
       context.stroke();
+      context.globalAlpha = 1;
     };
 
     const drawMouth = (time: number, expressionNow: WatcherExpression) => {
