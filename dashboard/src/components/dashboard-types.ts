@@ -40,6 +40,7 @@ export type PrimaryView = "home" | "automations" | "music" | "studio";
 export type AutomationKey =
   | "ai"
   | "welcome"
+  | "goodbye"
   | "roles"
   | "tickets"
   | "levels"

@@ -134,7 +134,14 @@ export const visualStudioCatalog: readonly VisualStudioDefinition[] = [
     description: "A quiet final transmission for departures.",
     format: "960 x 360",
     accent: "#9b91c7",
-    variables: ["{user}", "{server}", "{membercount}"]
+    variables: [
+      "{user}",
+      "{username}",
+      "{mention}",
+      "{server}",
+      "{membercount}",
+      "{count}"
+    ]
   },
   {
     type: "ticket",
@@ -225,6 +232,7 @@ export function getVisualStudioDefinition(studioType: VisualStudioType) {
 
 const sampleVariables: Record<string, string> = {
   "{user}": "Raven",
+  "{username}": "raven38",
   "{mention}": "@Raven",
   "{server}": "blunt38 community",
   "{membercount}": "2,438",
@@ -252,9 +260,11 @@ const sampleVariables: Record<string, string> = {
 
 export const variableOptions = [
   "{user}",
+  "{username}",
   "{mention}",
   "{server}",
   "{membercount}",
+  "{count}",
   "{inviter}",
   "{created}",
   "{ticket}",

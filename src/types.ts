@@ -14,6 +14,8 @@ export type GuildConfig = {
   guildId: string;
   welcomeChannelId?: string;
   welcomeMessage?: string;
+  goodbyeChannelId?: string;
+  goodbyeMessage?: string;
   logChannelId?: string;
   ticketCategoryId?: string;
   supportRoleId?: string;

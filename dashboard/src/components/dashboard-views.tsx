@@ -7,6 +7,7 @@ import {
   Check,
   ChevronRight,
   Crown,
+  DoorOpen,
   Eye,
   Headphones,
   ListChecks,
@@ -68,6 +69,12 @@ const automationMeta: Array<{
     icon: Sparkles
   },
   {
+    key: "goodbye",
+    label: "Goodbye",
+    description: "Departure channel and message",
+    icon: DoorOpen
+  },
+  {
     key: "roles",
     label: "Member roles",
     description: "Autorole and verification",
@@ -123,6 +130,12 @@ export function HomeView({
       label: "Welcome messages",
       enabled: Boolean(config.welcomeChannelId),
       detail: displayChannel(channels, config.welcomeChannelId)
+    },
+    {
+      key: "goodbye" as const,
+      label: "Goodbye messages",
+      enabled: Boolean(config.goodbyeChannelId),
+      detail: displayChannel(channels, config.goodbyeChannelId)
     },
     {
       key: "tickets" as const,
@@ -413,6 +426,43 @@ function AutomationEditor({
     );
   }
 
+  if (automation === "goodbye") {
+    return (
+      <EditorSurface
+        title="Goodbye"
+        description="Send a final message when somebody leaves the server."
+        preview={onPreview}
+      >
+        <SelectField
+          label="Goodbye channel"
+          value={config.goodbyeChannelId}
+          options={textChannels(channels)}
+          placeholder="Disabled"
+          onChange={(value) => updateConfig("goodbyeChannelId", value)}
+        />
+        <label className="minimal-field">
+          <span>Goodbye message</span>
+          <textarea
+            value={config.goodbyeMessage ?? ""}
+            onChange={(event) =>
+              updateConfig("goodbyeMessage", event.target.value)
+            }
+          />
+          <small>
+            Variables: {"{user}"} {"{username}"} {"{server}"} {"{count}"}
+          </small>
+        </label>
+        <div className="minimal-note">
+          <Palette size={18} />
+          <span>
+            Publishing a Goodbye design in Studio adds its card automatically.
+            Text still sends if the card is unavailable.
+          </span>
+        </div>
+      </EditorSurface>
+    );
+  }
+
   if (automation === "roles") {
     return (
       <EditorSurface
@@ -605,6 +655,7 @@ export function PreviewDrawer({
   channels,
   roles,
   guildName,
+  automation,
   onClose
 }: {
   open: boolean;
@@ -612,6 +663,7 @@ export function PreviewDrawer({
   channels: Channel[];
   roles: Role[];
   guildName: string;
+  automation: AutomationKey | null;
   onClose: () => void;
 }) {
   if (!open) return null;
@@ -620,6 +672,12 @@ export function PreviewDrawer({
     .replaceAll("{user}", "@Raven")
     .replaceAll("{server}", guildName)
     .replaceAll("{count}", "247");
+  const goodbye = (config.goodbyeMessage ?? "")
+    .replaceAll("{user}", "Raven")
+    .replaceAll("{username}", "raven")
+    .replaceAll("{server}", guildName)
+    .replaceAll("{count}", "246");
+  const isGoodbye = automation === "goodbye";
 
   return (
     <div className="preview-backdrop" role="presentation" onMouseDown={onClose}>
@@ -633,7 +691,7 @@ export function PreviewDrawer({
         <header>
           <div>
             <span className="minimal-eyebrow">Preview</span>
-            <h2>Discord message</h2>
+            <h2>{isGoodbye ? "Goodbye message" : "Discord message"}</h2>
           </div>
           <button type="button" aria-label="Close preview" onClick={onClose}>
             <X size={19} />
@@ -651,7 +709,11 @@ export function PreviewDrawer({
           <img src="/brand/blunt38-logo.jpg" alt="" />
           <div>
             <strong>blunt38 <span>APP</span></strong>
-            <p>{welcome || "Welcome @Raven to the server."}</p>
+            <p>
+              {isGoodbye
+                ? goodbye || "Raven left the server. 246 members remain."
+                : welcome || "Welcome @Raven to the server."}
+            </p>
           </div>
         </div>
 
@@ -667,6 +729,10 @@ export function PreviewDrawer({
           <div>
             <dt>Welcome</dt>
             <dd>{displayChannel(channels, config.welcomeChannelId)}</dd>
+          </div>
+          <div>
+            <dt>Goodbye</dt>
+            <dd>{displayChannel(channels, config.goodbyeChannelId)}</dd>
           </div>
           <div>
             <dt>Staff</dt>

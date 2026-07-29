@@ -53,7 +53,7 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 | Draw Party | Real-time browser drawing rooms with word choices, brush, fill, eraser, colors, sounds, guesses, rounds, and scoring |
 | Tickets | Modal intake, category routing, staff claims, locks, transcripts, and close confirmation |
 | Moderation | Warnings, timeouts, kicks, bans, stored cases, history, and voice disconnect controls |
-| Community | Visual welcome cards, welcome messages, autoroles, self-role menus, polls, suggestions, birthdays, and giveaways |
+| Community | Independent welcome and goodbye messages with visual cards, autoroles, self-role menus, polls, suggestions, birthdays, and giveaways |
 | Leveling | XP, rank cards, leaderboards, and configurable level-up announcements |
 | Voice | Join-to-create temporary channels with automatic empty-room cleanup |
 | Server builder | Preview, build, and clean complete server layouts with roles, categories, channels, panels, and bot wiring |
@@ -64,18 +64,19 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 
 ```text
 /help           /ai              /setup           /welcome
-/role           /role-panel      /ticket-panel    /moderate
-/server         /poll            /suggest-panel   /tempvc
-/giveaway       /leveling        /rank             /leaderboard
-/embed          /birthday        /serverinfo       /userinfo
-/emoji          /sticker         /minigame         /music
-/voice          /draw
+/goodbye        /role            /role-panel      /ticket-panel
+/moderate       /server          /poll            /suggest-panel
+/tempvc         /giveaway        /leveling        /rank
+/leaderboard    /embed           /birthday        /serverinfo
+/userinfo       /emoji           /sticker         /minigame
+/music          /voice           /draw
 ```
 
 The heavier command groups have subcommands. The important ones:
 
 ```text
 /ai ask | setup | disable | prompt | persona | status
+/goodbye set | test | clear
 /music play | pause | resume | skip | stop | queue | nowplaying
        volume | loop | shuffle | remove
 /role give | remove | autorole | clear-autorole
@@ -192,6 +193,7 @@ supabase/migrations/001_discord_bot_core_schema.sql
 supabase/migrations/002_visual_studio_foundation.sql
 supabase/migrations/003_visual_asset_library.sql
 supabase/migrations/004_starboard_engine.sql
+supabase/migrations/005_goodbye_messages.sql
 ```
 
 Run the migrations in numeric order. The database stores guild configuration, moderation cases, polls, role panels, giveaways, XP, birthdays, temporary voice state, visual Studio documents, and immutable template versions. It remembers the lore so the process does not have to.

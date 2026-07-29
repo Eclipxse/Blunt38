@@ -6,6 +6,7 @@ import { drawCommand } from "./draw.js";
 import { embedBuilderCommand } from "./embed-builder.js";
 import { emojiCommand, stickerCommand } from "./emoji-sticker.js";
 import { giveawayCommand } from "./giveaway.js";
+import { goodbyeCommand } from "./goodbye.js";
 import { helpCommand } from "./help.js";
 import { serverInfoCommand, userInfoCommand } from "./info.js";
 import { leaderboardCommand, levelingCommand, rankCommand } from "./leveling.js";
@@ -31,6 +32,7 @@ export const commands: Command[] = [
   aiCommand,
   setupCommand,
   welcomeCommand,
+  goodbyeCommand,
   roleCommand,
   ticketPanelCommand,
   rolePanelCommand,

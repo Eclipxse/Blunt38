@@ -6,6 +6,8 @@ export type GuildConfig = {
   guildId: string;
   welcomeChannelId: string | null;
   welcomeMessage: string | null;
+  goodbyeChannelId: string | null;
+  goodbyeMessage: string | null;
   logChannelId: string | null;
   ticketCategoryId: string | null;
   supportRoleId: string | null;
@@ -28,6 +30,8 @@ type GuildConfigRow = {
   guild_id: string;
   welcome_channel_id: string | null;
   welcome_message: string | null;
+  goodbye_channel_id: string | null;
+  goodbye_message: string | null;
   log_channel_id: string | null;
   ticket_category_id: string | null;
   support_role_id: string | null;
@@ -49,6 +53,7 @@ type GuildConfigRow = {
 export type GuildConfigPatch = Partial<Omit<GuildConfig, "guildId" | "updatedAt">>;
 
 const defaultWelcome = "Welcome {user} to {server}. You are member #{count}.";
+const defaultGoodbye = "{user} left {server}. {count} members remain.";
 const defaultPrompt =
   "Reply like a fun Gen Z community girl. Keep it short, warm, witty, and never mean. Match the user's energy.";
 
@@ -57,6 +62,8 @@ function fallback(guildId: string): GuildConfig {
     guildId,
     welcomeChannelId: null,
     welcomeMessage: defaultWelcome,
+    goodbyeChannelId: null,
+    goodbyeMessage: defaultGoodbye,
     logChannelId: null,
     ticketCategoryId: null,
     supportRoleId: null,
@@ -84,6 +91,8 @@ function toConfig(row: GuildConfigRow | undefined, guildId: string): GuildConfig
     guildId: row.guild_id,
     welcomeChannelId: row.welcome_channel_id,
     welcomeMessage: row.welcome_message ?? base.welcomeMessage,
+    goodbyeChannelId: row.goodbye_channel_id,
+    goodbyeMessage: row.goodbye_message ?? base.goodbyeMessage,
     logChannelId: row.log_channel_id,
     ticketCategoryId: row.ticket_category_id,
     supportRoleId: row.support_role_id,
@@ -126,6 +135,14 @@ function cleanColor(value: unknown) {
   return Math.max(0, Math.min(0xffffff, Math.round(value)));
 }
 
+function patchedValue<K extends keyof GuildConfigPatch>(
+  patch: GuildConfigPatch,
+  key: K,
+  current: GuildConfig[K]
+) {
+  return patch[key] === undefined ? current : patch[key];
+}
+
 export async function getGuildConfig(guildId: string) {
   const result = await query<GuildConfigRow>("select * from public.guild_configs where guild_id = $1", [guildId]);
   return toConfig(result.rows[0], guildId);
@@ -137,19 +154,29 @@ export async function updateGuildConfig(guildId: string, patch: GuildConfigPatch
     ...current,
     ...patch,
     guildId,
-    welcomeChannelId: cleanString(patch.welcomeChannelId ?? current.welcomeChannelId),
-    welcomeMessage: cleanString(patch.welcomeMessage ?? current.welcomeMessage) ?? defaultWelcome,
-    logChannelId: cleanString(patch.logChannelId ?? current.logChannelId),
-    ticketCategoryId: cleanString(patch.ticketCategoryId ?? current.ticketCategoryId),
-    supportRoleId: cleanString(patch.supportRoleId ?? current.supportRoleId),
-    verifiedRoleId: cleanString(patch.verifiedRoleId ?? current.verifiedRoleId),
-    autoRoleId: cleanString(patch.autoRoleId ?? current.autoRoleId),
-    tempVoiceJoinChannelId: cleanString(patch.tempVoiceJoinChannelId ?? current.tempVoiceJoinChannelId),
-    tempVoiceCategoryId: cleanString(patch.tempVoiceCategoryId ?? current.tempVoiceCategoryId),
-    birthdayChannelId: cleanString(patch.birthdayChannelId ?? current.birthdayChannelId),
-    levelUpChannelId: cleanString(patch.levelUpChannelId ?? current.levelUpChannelId),
-    aiResponderChannelId: cleanString(patch.aiResponderChannelId ?? current.aiResponderChannelId),
-    aiResponderPrompt: cleanString(patch.aiResponderPrompt ?? current.aiResponderPrompt) ?? defaultPrompt,
+    welcomeChannelId: cleanString(patchedValue(patch, "welcomeChannelId", current.welcomeChannelId)),
+    welcomeMessage: cleanString(patchedValue(patch, "welcomeMessage", current.welcomeMessage)) ?? defaultWelcome,
+    goodbyeChannelId: cleanString(patchedValue(patch, "goodbyeChannelId", current.goodbyeChannelId)),
+    goodbyeMessage: cleanString(patchedValue(patch, "goodbyeMessage", current.goodbyeMessage)) ?? defaultGoodbye,
+    logChannelId: cleanString(patchedValue(patch, "logChannelId", current.logChannelId)),
+    ticketCategoryId: cleanString(patchedValue(patch, "ticketCategoryId", current.ticketCategoryId)),
+    supportRoleId: cleanString(patchedValue(patch, "supportRoleId", current.supportRoleId)),
+    verifiedRoleId: cleanString(patchedValue(patch, "verifiedRoleId", current.verifiedRoleId)),
+    autoRoleId: cleanString(patchedValue(patch, "autoRoleId", current.autoRoleId)),
+    tempVoiceJoinChannelId: cleanString(
+      patchedValue(patch, "tempVoiceJoinChannelId", current.tempVoiceJoinChannelId)
+    ),
+    tempVoiceCategoryId: cleanString(
+      patchedValue(patch, "tempVoiceCategoryId", current.tempVoiceCategoryId)
+    ),
+    birthdayChannelId: cleanString(patchedValue(patch, "birthdayChannelId", current.birthdayChannelId)),
+    levelUpChannelId: cleanString(patchedValue(patch, "levelUpChannelId", current.levelUpChannelId)),
+    aiResponderChannelId: cleanString(
+      patchedValue(patch, "aiResponderChannelId", current.aiResponderChannelId)
+    ),
+    aiResponderPrompt: cleanString(
+      patchedValue(patch, "aiResponderPrompt", current.aiResponderPrompt)
+    ) ?? defaultPrompt,
     aiResponderPersona: cleanPersona(patch.aiResponderPersona ?? current.aiResponderPersona),
     levelingEnabled: cleanBoolean(patch.levelingEnabled ?? current.levelingEnabled),
     aiResponderEnabled: cleanBoolean(patch.aiResponderEnabled ?? current.aiResponderEnabled),
@@ -159,19 +186,23 @@ export async function updateGuildConfig(guildId: string, patch: GuildConfigPatch
 
   const result = await query<GuildConfigRow>(
     `insert into public.guild_configs (
-      guild_id, welcome_channel_id, welcome_message, log_channel_id, ticket_category_id, support_role_id,
-      verified_role_id, auto_role_id, temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id,
-      leveling_enabled, level_up_channel_id, ai_responder_enabled, ai_responder_channel_id,
-      ai_responder_prompt, ai_responder_persona, accent_color
+      guild_id, welcome_channel_id, welcome_message, goodbye_channel_id, goodbye_message,
+      log_channel_id, ticket_category_id, support_role_id, verified_role_id, auto_role_id,
+      temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id, leveling_enabled,
+      level_up_channel_id, ai_responder_enabled, ai_responder_channel_id, ai_responder_prompt,
+      ai_responder_persona, accent_color
     ) values (
-      $1, $2, $3, $4, $5, $6,
-      $7, $8, $9, $10, $11,
-      $12, $13, $14, $15,
-      $16, $17, $18
+      $1, $2, $3, $4, $5,
+      $6, $7, $8, $9, $10,
+      $11, $12, $13, $14,
+      $15, $16, $17, $18,
+      $19, $20
     )
     on conflict (guild_id) do update set
       welcome_channel_id = excluded.welcome_channel_id,
       welcome_message = excluded.welcome_message,
+      goodbye_channel_id = excluded.goodbye_channel_id,
+      goodbye_message = excluded.goodbye_message,
       log_channel_id = excluded.log_channel_id,
       ticket_category_id = excluded.ticket_category_id,
       support_role_id = excluded.support_role_id,
@@ -192,6 +223,8 @@ export async function updateGuildConfig(guildId: string, patch: GuildConfigPatch
       guildId,
       next.welcomeChannelId,
       next.welcomeMessage,
+      next.goodbyeChannelId,
+      next.goodbyeMessage,
       next.logChannelId,
       next.ticketCategoryId,
       next.supportRoleId,
