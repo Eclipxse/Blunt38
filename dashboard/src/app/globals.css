@@ -7785,3 +7785,77 @@ body::after {
     animation: none !important;
   }
 }
+
+/* Login particle masthead */
+
+.login-particle-word {
+  top: 3.5%;
+  right: auto;
+  bottom: auto;
+  left: 18vw;
+  display: block;
+  width: min(760px, 52vw);
+  height: 220px;
+  opacity: 0.9;
+  filter:
+    saturate(1.18)
+    contrast(1.12)
+    drop-shadow(0 0 8px rgba(184, 139, 231, 0.28))
+    drop-shadow(0 0 24px rgba(221, 108, 168, 0.14));
+  mix-blend-mode: screen;
+}
+
+.login-particle-word canvas {
+  filter: brightness(1.16);
+}
+
+.login-particle-word::after {
+  position: absolute;
+  right: 8%;
+  bottom: 13%;
+  left: 8%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(184, 139, 231, 0.38) 18%,
+    rgba(221, 108, 168, 0.3) 72%,
+    transparent
+  );
+  content: "";
+  opacity: 0.72;
+}
+
+@media (max-width: 1000px) {
+  .login-particle-word {
+    top: 6%;
+    left: 10vw;
+    width: 52vw;
+    height: 180px;
+    opacity: 0.84;
+  }
+}
+
+@media (max-width: 700px) {
+  .login-particle-word {
+    top: 76px;
+    left: 5vw;
+    display: block;
+    width: 90vw;
+    height: 112px;
+    opacity: 0.68;
+  }
+
+  .login-particle-word::after {
+    bottom: 7%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-particle-word {
+    filter:
+      saturate(1.08)
+      contrast(1.08)
+      drop-shadow(0 0 12px rgba(184, 139, 231, 0.2));
+  }
+}
