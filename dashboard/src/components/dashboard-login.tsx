@@ -7,6 +7,7 @@ import {
   DotShift,
   ParticleWord
 } from "@/components/signal-effects";
+import { TextGlitch } from "@/components/text-glitch";
 import { signal38 } from "@/components/watcher-38";
 
 export function DashboardLogin({ error }: { error: string | null }) {
@@ -30,10 +31,12 @@ export function DashboardLogin({ error }: { error: string | null }) {
 
       <section className="minimal-login-copy">
         <span className="minimal-eyebrow">Signal 38 / Discord operations</span>
-        <h1>Control your server.</h1>
+        <h1>
+          <TextGlitch text="Bitch, do what you want." />
+        </h1>
         <p>
-          Configure the bot, keep automations tidy, and publish every change from
-          one quiet place.
+          Your server, your rules. Music, AI, roles, chaos. blunt38 handles the
+          boring shit.
         </p>
 
         {error ? <div className="minimal-login-error">{error}</div> : null}
@@ -45,13 +48,13 @@ export function DashboardLogin({ error }: { error: string | null }) {
           onMouseEnter={() => signal38("connect-hover")}
         >
           <LockKeyhole size={17} />
-          Connect Discord
+          Let me in
           <ArrowRight size={17} />
         </a>
 
         <div className="minimal-login-status">
           <span />
-          OAuth ready
+          Discord is waiting
         </div>
       </section>
     </main>

@@ -5294,6 +5294,131 @@ body::after {
   line-height: 0.98;
 }
 
+.text-glitch {
+  position: relative;
+  display: block;
+  color: inherit;
+  cursor: default;
+  user-select: none;
+}
+
+.text-glitch::before,
+.text-glitch::after {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  overflow: hidden;
+  color: inherit;
+  content: attr(data-text);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.text-glitch:not(.text-glitch-on-hover)::after {
+  left: 5px;
+  text-shadow: var(--glitch-after-shadow);
+  animation:
+    blunt-text-glitch var(--glitch-after-duration) infinite
+    steps(1, end) alternate-reverse;
+}
+
+.text-glitch:not(.text-glitch-on-hover)::before {
+  left: -5px;
+  text-shadow: var(--glitch-before-shadow);
+  animation:
+    blunt-text-glitch var(--glitch-before-duration) infinite
+    steps(1, end) alternate-reverse;
+}
+
+.text-glitch-on-hover:hover::after {
+  left: 5px;
+  text-shadow: var(--glitch-after-shadow);
+  animation:
+    blunt-text-glitch var(--glitch-after-duration) infinite
+    steps(1, end) alternate-reverse;
+}
+
+.text-glitch-on-hover:hover::before {
+  left: -5px;
+  text-shadow: var(--glitch-before-shadow);
+  animation:
+    blunt-text-glitch var(--glitch-before-duration) infinite
+    steps(1, end) alternate-reverse;
+}
+
+@keyframes blunt-text-glitch {
+  0%,
+  7%,
+  14%,
+  74%,
+  100% {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+
+  8% {
+    clip-path: inset(18% 0 56% 0);
+    opacity: 0.82;
+    transform: translate(-2px, 0);
+  }
+
+  9% {
+    clip-path: inset(62% 0 12% 0);
+    opacity: 0.65;
+    transform: translate(3px, 0);
+  }
+
+  10% {
+    clip-path: inset(38% 0 40% 0);
+    opacity: 0.74;
+    transform: translate(-1px, 0);
+  }
+
+  11% {
+    clip-path: inset(76% 0 6% 0);
+    opacity: 0.58;
+    transform: translate(2px, 0);
+  }
+
+  12% {
+    clip-path: inset(8% 0 72% 0);
+    opacity: 0.72;
+    transform: translate(-3px, 0);
+  }
+
+  13% {
+    clip-path: inset(48% 0 24% 0);
+    opacity: 0.48;
+    transform: translate(1px, 0);
+  }
+
+  75% {
+    clip-path: inset(26% 0 52% 0);
+    opacity: 0.42;
+    transform: translate(2px, 0);
+  }
+
+  76% {
+    clip-path: inset(68% 0 10% 0);
+    opacity: 0.56;
+    transform: translate(-2px, 0);
+  }
+
+  77% {
+    clip-path: inset(44% 0 36% 0);
+    opacity: 0.35;
+    transform: translate(1px, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-glitch::before,
+  .text-glitch::after {
+    animation: none !important;
+  }
+}
+
 .minimal-login-copy > p {
   max-width: 450px;
   color: #b8a9b7;
