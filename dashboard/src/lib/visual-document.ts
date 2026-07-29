@@ -276,13 +276,82 @@ export const variableOptions = [
   "{reason}"
 ] as const;
 
-export const fontOptions = [
-  "Inter",
-  "Space Grotesk",
-  "IBM Plex Mono",
-  "Arial",
-  "Georgia"
+export const fontCategories = [
+  "Cute",
+  "Attitude",
+  "Pixel",
+  "Editorial",
+  "Clean"
 ] as const;
+
+export type FontCategory = (typeof fontCategories)[number];
+
+export type StudioFontOption = {
+  family: string;
+  category: FontCategory;
+  preview: string;
+  file?: string;
+  weight?: string;
+};
+
+export const fontOptions: readonly StudioFontOption[] = [
+  { family: "Fredoka", category: "Cute", preview: "soft chaos", file: "Fredoka.ttf", weight: "300 700" },
+  { family: "Comfortaa", category: "Cute", preview: "pretty things", file: "Comfortaa.ttf", weight: "300 700" },
+  { family: "Pacifico", category: "Cute", preview: "kiss & tell", file: "Pacifico.ttf" },
+  { family: "Indie Flower", category: "Cute", preview: "dear diary", file: "IndieFlower.ttf" },
+  { family: "Lobster", category: "Cute", preview: "too pretty", file: "Lobster.ttf" },
+  { family: "Caveat", category: "Cute", preview: "little secret", file: "Caveat.ttf", weight: "400 700" },
+  { family: "Lilita One", category: "Cute", preview: "sweet menace", file: "LilitaOne.ttf" },
+  { family: "Luckiest Guy", category: "Cute", preview: "main character", file: "LuckiestGuy.ttf" },
+  { family: "Cherry Bomb One", category: "Cute", preview: "cute but loud", file: "CherryBombOne.ttf" },
+  { family: "Dancing Script", category: "Cute", preview: "love me later", file: "DancingScript.ttf", weight: "400 700" },
+
+  { family: "Bangers", category: "Attitude", preview: "say it louder", file: "Bangers.ttf" },
+  { family: "Bebas Neue", category: "Attitude", preview: "no apologies", file: "BebasNeue.ttf" },
+  { family: "Permanent Marker", category: "Attitude", preview: "leave a mark", file: "PermanentMarker.ttf" },
+  { family: "Rubik Glitch", category: "Attitude", preview: "signal damaged", file: "RubikGlitch.ttf" },
+  { family: "Righteous", category: "Attitude", preview: "look at me", file: "Righteous.ttf" },
+  { family: "Unbounded", category: "Attitude", preview: "zero limits", file: "Unbounded.ttf", weight: "200 900" },
+  { family: "Orbitron", category: "Attitude", preview: "future threat", file: "Orbitron.ttf", weight: "400 900" },
+  { family: "Special Elite", category: "Attitude", preview: "classified", file: "SpecialElite.ttf" },
+  { family: "Monoton", category: "Attitude", preview: "after midnight", file: "Monoton.ttf" },
+  { family: "Black Ops One", category: "Attitude", preview: "final warning", file: "BlackOpsOne.ttf" },
+
+  { family: "Press Start 2P", category: "Pixel", preview: "insert coin", file: "PressStart2P.ttf" },
+  { family: "Jersey 10", category: "Pixel", preview: "player one", file: "Jersey10.ttf" },
+  { family: "Share Tech Mono", category: "Pixel", preview: "system online", file: "ShareTechMono.ttf" },
+  { family: "Silkscreen", category: "Pixel", preview: "save point", file: "Silkscreen.ttf" },
+  { family: "VT323", category: "Pixel", preview: "terminal crush", file: "VT323.ttf" },
+
+  { family: "Playfair Display", category: "Editorial", preview: "beautiful damage", file: "PlayfairDisplay.ttf", weight: "400 900" },
+  { family: "DM Serif Display", category: "Editorial", preview: "private affair", file: "DMSerifDisplay.ttf" },
+  { family: "Abril Fatface", category: "Editorial", preview: "read between us", file: "AbrilFatface.ttf" },
+  { family: "Cormorant Garamond", category: "Editorial", preview: "softly dramatic", file: "CormorantGaramond.ttf", weight: "300 700" },
+  { family: "Cinzel", category: "Editorial", preview: "pretty dangerous", file: "Cinzel.ttf", weight: "400 900" },
+
+  { family: "Space Grotesk", category: "Clean", preview: "clean signal", file: "SpaceGrotesk.ttf", weight: "300 700" },
+  { family: "Syne", category: "Clean", preview: "different on purpose", file: "Syne.ttf", weight: "400 800" },
+  { family: "Nunito", category: "Clean", preview: "easy on the eyes", file: "Nunito.ttf", weight: "200 1000" },
+  { family: "Inter", category: "Clean", preview: "say it clearly", file: "Inter.ttf", weight: "100 900" },
+  { family: "IBM Plex Mono", category: "Clean", preview: "control signal", file: "IBMPlexMono.ttf" }
+] as const;
+
+let studioFontsLoaded = false;
+
+export function loadStudioFonts() {
+  if (studioFontsLoaded || typeof window === "undefined" || !("FontFace" in window)) return;
+  studioFontsLoaded = true;
+
+  for (const font of fontOptions) {
+    if (!font.file) continue;
+    const face = new FontFace(
+      font.family,
+      `url("/fonts/${font.file}") format("truetype")`,
+      { display: "swap", weight: font.weight ?? "400" }
+    );
+    window.document.fonts.add(face);
+  }
+}
 
 export function previewText(value: string) {
   return Object.entries(sampleVariables).reduce(

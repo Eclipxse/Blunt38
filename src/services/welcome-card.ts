@@ -1,4 +1,12 @@
-import { createCanvas, loadImage, type Image, type SKRSContext2D } from "@napi-rs/canvas";
+import {
+  GlobalFonts,
+  createCanvas,
+  loadImage,
+  type Image,
+  type SKRSContext2D
+} from "@napi-rs/canvas";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { GuildMember, User } from "discord.js";
 import type {
   VisualAvatarElement,
@@ -20,6 +28,58 @@ type DrawRect = {
   width: number;
   height: number;
 };
+
+const studioFontFiles = [
+  ["Fredoka", "Fredoka.ttf"],
+  ["Comfortaa", "Comfortaa.ttf"],
+  ["Pacifico", "Pacifico.ttf"],
+  ["Indie Flower", "IndieFlower.ttf"],
+  ["Lobster", "Lobster.ttf"],
+  ["Caveat", "Caveat.ttf"],
+  ["Lilita One", "LilitaOne.ttf"],
+  ["Luckiest Guy", "LuckiestGuy.ttf"],
+  ["Cherry Bomb One", "CherryBombOne.ttf"],
+  ["Dancing Script", "DancingScript.ttf"],
+  ["Bangers", "Bangers.ttf"],
+  ["Bebas Neue", "BebasNeue.ttf"],
+  ["Permanent Marker", "PermanentMarker.ttf"],
+  ["Rubik Glitch", "RubikGlitch.ttf"],
+  ["Righteous", "Righteous.ttf"],
+  ["Unbounded", "Unbounded.ttf"],
+  ["Orbitron", "Orbitron.ttf"],
+  ["Special Elite", "SpecialElite.ttf"],
+  ["Monoton", "Monoton.ttf"],
+  ["Black Ops One", "BlackOpsOne.ttf"],
+  ["Press Start 2P", "PressStart2P.ttf"],
+  ["Jersey 10", "Jersey10.ttf"],
+  ["Share Tech Mono", "ShareTechMono.ttf"],
+  ["Silkscreen", "Silkscreen.ttf"],
+  ["VT323", "VT323.ttf"],
+  ["Playfair Display", "PlayfairDisplay.ttf"],
+  ["DM Serif Display", "DMSerifDisplay.ttf"],
+  ["Abril Fatface", "AbrilFatface.ttf"],
+  ["Cormorant Garamond", "CormorantGaramond.ttf"],
+  ["Cinzel", "Cinzel.ttf"],
+  ["Space Grotesk", "SpaceGrotesk.ttf"],
+  ["Syne", "Syne.ttf"],
+  ["Nunito", "Nunito.ttf"],
+  ["Inter", "Inter.ttf"],
+  ["IBM Plex Mono", "IBMPlexMono.ttf"]
+] as const;
+
+const studioFontFamilies = new Set<string>(studioFontFiles.map(([family]) => family));
+const studioFontDirectory = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../../dashboard/public/fonts"
+);
+
+for (const [family, file] of studioFontFiles) {
+  try {
+    GlobalFonts.registerFromPath(resolve(studioFontDirectory, file), family);
+  } catch {
+    // Keep card rendering available if a deployment is missing the optional font pack.
+  }
+}
 
 function resolveVariables(value: string, context: VisualCardContext) {
   return Object.entries(context.variables).reduce(
@@ -153,6 +213,7 @@ async function drawBackground(ctx: SKRSContext2D, document: VisualDocument) {
 }
 
 function fontFamily(value: string) {
+  if (studioFontFamilies.has(value)) return value;
   if (value.includes("Mono")) return "DejaVu Sans Mono";
   if (value === "Georgia") return "DejaVu Serif";
   return "DejaVu Sans";
