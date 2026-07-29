@@ -26,7 +26,11 @@ export type WatcherAction =
   | "studio-open"
   | "studio-exit"
   | "studio-undo"
-  | "studio-save";
+  | "studio-save"
+  | "hover-face"
+  | "hover-leave"
+  | "poke"
+  | "chase";
 
 type WatcherExpression =
   | "idle"
@@ -54,11 +58,10 @@ type Cell = {
   x: number;
   y: number;
   alpha: number;
-  accent: boolean;
+  tone: "soft" | "ink";
 };
 
 const SIGNAL_NAME = "blunt38:watcher";
-const asciiRamp = ".,:;+*#@";
 
 const reactions: Record<
   Exclude<WatcherAction, "context" | "navigate">,
@@ -114,6 +117,29 @@ const reactions: Record<
     expression: "pleased",
     lines: ["this one can stay.", "keep that version."],
     urgent: true
+  },
+  "hover-face": {
+    expression: "doubt",
+    lines: [
+      "eww. move ur cursor, perv.",
+      "my face is not a button.",
+      "personal space. heard of it?"
+    ],
+    urgent: true
+  },
+  "hover-leave": {
+    expression: "pleased",
+    lines: ["better.", "good choice.", "that's what i thought."],
+    urgent: true
+  },
+  poke: {
+    expression: "glitch",
+    lines: ["did you just poke me?", "hands off the pixels.", "rude."],
+    urgent: true
+  },
+  chase: {
+    expression: "curious",
+    lines: ["pick a direction.", "your cursor has issues."]
   }
 };
 
@@ -193,10 +219,10 @@ function createBasePortrait(
   const context = base.getContext("2d");
   if (!context) return base;
 
-  const cellWidth = width < 320 ? 7 : width < 520 ? 8 : 9;
-  const cellHeight = cellWidth * 1.35;
-  const columns = Math.max(32, Math.floor(width / cellWidth));
-  const rows = Math.max(38, Math.floor(height / cellHeight));
+  const cellWidth = width < 280 ? 6.4 : width < 520 ? 7.4 : 8.4;
+  const cellHeight = cellWidth * 1.44;
+  const columns = Math.max(38, Math.floor(width / cellWidth));
+  const rows = Math.max(48, Math.floor(height / cellHeight));
   const sample = document.createElement("canvas");
   sample.width = columns;
   sample.height = rows;
@@ -205,10 +231,11 @@ function createBasePortrait(
   });
   if (!sampleContext) return base;
 
-  const sourceX = image.naturalWidth * 0.52;
-  const sourceY = image.naturalHeight * 0.015;
-  const sourceWidth = image.naturalWidth * 0.455;
-  const sourceHeight = image.naturalHeight * 0.965;
+  const sourceX = image.naturalWidth * 0.58;
+  const sourceY = image.naturalHeight * 0.035;
+  const sourceWidth = image.naturalWidth * 0.35;
+  const sourceHeight = image.naturalHeight * 0.91;
+  sampleContext.imageSmoothingEnabled = true;
   sampleContext.drawImage(
     image,
     sourceX,
@@ -222,6 +249,7 @@ function createBasePortrait(
   );
 
   const pixels = sampleContext.getImageData(0, 0, columns, rows).data;
+  const values = new Float32Array(columns * rows);
   const cells: Cell[] = [];
 
   for (let row = 0; row < rows; row += 1) {
@@ -231,32 +259,55 @@ function createBasePortrait(
         pixels[index] * 0.2126 +
         pixels[index + 1] * 0.7152 +
         pixels[index + 2] * 0.0722;
-      const darkness = Math.max(0, Math.min(1, (194 - luminance) / 170));
-      if (darkness < 0.11) continue;
-
-      const rampIndex = Math.min(
-        asciiRamp.length - 1,
-        Math.floor(darkness * asciiRamp.length)
+      values[row * columns + column] = Math.max(
+        0,
+        Math.min(1, (150 - luminance) / 105)
       );
+    }
+  }
+
+  const valueAt = (column: number, row: number) => {
+    if (column < 0 || row < 0 || column >= columns || row >= rows) return 0;
+    return values[row * columns + column];
+  };
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const darkness = valueAt(column, row);
+      if (darkness < 0.16) continue;
+
+      let neighbours = 0;
+      for (let offsetY = -1; offsetY <= 1; offsetY += 1) {
+        for (let offsetX = -1; offsetX <= 1; offsetX += 1) {
+          if (offsetX === 0 && offsetY === 0) continue;
+          if (valueAt(column + offsetX, row + offsetY) >= 0.16) {
+            neighbours += 1;
+          }
+        }
+      }
+
+      if (neighbours < 2 && darkness < 0.68) continue;
+
+      const character = darkness >= 0.7 ? "#" : darkness >= 0.4 ? "+" : ":";
       cells.push({
-        character: asciiRamp[rampIndex],
+        character,
         x: (column + 0.5) * cellWidth,
         y: (row + 0.82) * cellHeight,
-        alpha: 0.28 + darkness * 0.72,
-        accent:
-          darkness > 0.42 && (column * 17 + row * 29) % 113 === 0
+        alpha: 0.54 + darkness * 0.42,
+        tone: darkness >= 0.58 ? "ink" : "soft"
       });
     }
   }
 
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `600 ${Math.max(7, cellHeight * 0.92)}px "Courier New", monospace`;
+  context.font = `700 ${Math.max(7, cellHeight * 0.88)}px "Courier New", monospace`;
 
   for (const cell of cells) {
-    context.fillStyle = cell.accent
-      ? `rgba(219, 115, 158, ${cell.alpha * 0.9})`
-      : `rgba(205, 187, 215, ${cell.alpha})`;
+    context.fillStyle =
+      cell.tone === "ink"
+        ? `rgba(220, 207, 226, ${cell.alpha})`
+        : `rgba(170, 162, 239, ${cell.alpha * 0.78})`;
     context.fillText(cell.character, cell.x, cell.y);
   }
 
@@ -267,6 +318,7 @@ export function Watcher38() {
   const hostRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const expressionRef = useRef<WatcherExpression>("idle");
+  const modeRef = useRef<WatcherMode>("loading");
   const lastSpokenAt = useRef(0);
   const previousLine = useRef("");
   const expressionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -277,10 +329,15 @@ export function Watcher38() {
   const [line, setLine] = useState("");
   const [typedLine, setTypedLine] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
   useEffect(() => {
     expressionRef.current = expression;
   }, [expression]);
+
+  useEffect(() => {
+    modeRef.current = mode;
+  }, [mode]);
 
   const react = useCallback((detail: WatcherSignalDetail) => {
     if (detail.mode) setMode(detail.mode);
@@ -421,6 +478,15 @@ export function Watcher38() {
     let blink = false;
     let blinkTimer = 0;
     let blinkCloseTimer = 0;
+    let hoverTimer = 0;
+    let leaveTimer = 0;
+    let hoveringFace = false;
+    let hoverReactionAt = 0;
+    let lastPokeAt = 0;
+    let lastChaseAt = 0;
+    let lastPointerAt = 0;
+    let lastPointerX = 0;
+    let lastPointerY = 0;
     let lastFrame = 0;
     const reducedMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)"
@@ -476,8 +542,8 @@ export function Watcher38() {
       context.drawImage(base, 0, 0, width, height);
       context.globalAlpha = 1;
 
-      const eyeY = height * 0.385;
-      const eyeXs = [width * 0.445, width * 0.6];
+      const eyeY = height * 0.38;
+      const eyeXs = [width * 0.34, width * 0.59];
       const eyeWidth = width * 0.1;
       const eyeHeight = height * 0.055;
       const eyeOffsetX = pointerCurrent.x * Math.min(4, width * 0.008);
@@ -511,8 +577,8 @@ export function Watcher38() {
       }
 
       if (currentExpression !== "idle") {
-        const mouthX = width * 0.525;
-        const mouthY = height * 0.515;
+        const mouthX = width * 0.47;
+        const mouthY = height * 0.505;
         context.clearRect(
           mouthX - width * 0.09,
           mouthY - height * 0.025,
@@ -545,6 +611,19 @@ export function Watcher38() {
       if (!reducedMotion) frame = requestAnimationFrame(animate);
     };
 
+    const isOverFace = (event: PointerEvent) => {
+      if (modeRef.current === "loading") return false;
+      const bounds = host.getBoundingClientRect();
+      const localX = (event.clientX - bounds.left) / bounds.width;
+      const localY = (event.clientY - bounds.top) / bounds.height;
+      return (
+        localX >= 0.06 &&
+        localX <= 0.94 &&
+        localY >= 0.04 &&
+        localY <= 0.66
+      );
+    };
+
     const pointerMove = (event: PointerEvent) => {
       pointerTarget.x = Math.max(
         -1,
@@ -554,7 +633,56 @@ export function Watcher38() {
         -1,
         Math.min(1, (event.clientY / window.innerHeight - 0.5) * 2)
       );
+
+      const now = performance.now();
+      const elapsed = Math.max(16, now - lastPointerAt);
+      const distance = Math.hypot(
+        event.clientX - lastPointerX,
+        event.clientY - lastPointerY
+      );
+      const speed = distance / elapsed;
+      const overFace = event.pointerType !== "touch" && isOverFace(event);
+
+      if (overFace && !hoveringFace) {
+        hoveringFace = true;
+        setHovered(true);
+        window.clearTimeout(leaveTimer);
+        hoverTimer = window.setTimeout(() => {
+          hoverReactionAt = Date.now();
+          signal38("hover-face");
+        }, 950);
+      } else if (!overFace && hoveringFace) {
+        hoveringFace = false;
+        setHovered(false);
+        window.clearTimeout(hoverTimer);
+        if (Date.now() - hoverReactionAt < 6200) {
+          leaveTimer = window.setTimeout(
+            () => signal38("hover-leave"),
+            420
+          );
+        }
+      }
+
+      if (
+        overFace &&
+        lastPointerAt > 0 &&
+        speed > 1.7 &&
+        Date.now() - lastChaseAt > 9000
+      ) {
+        lastChaseAt = Date.now();
+        signal38("chase");
+      }
+
+      lastPointerAt = now;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
       if (reducedMotion) draw(0);
+    };
+
+    const pointerDown = (event: PointerEvent) => {
+      if (!isOverFace(event) || Date.now() - lastPokeAt < 5200) return;
+      lastPokeAt = Date.now();
+      signal38("poke");
     };
 
     const scheduleBlink = () => {
@@ -574,6 +702,7 @@ export function Watcher38() {
     resizeObserver.observe(host);
     image.addEventListener("load", resize);
     window.addEventListener("pointermove", pointerMove, { passive: true });
+    window.addEventListener("pointerdown", pointerDown, { passive: true });
     image.src = "/brand/blunt38-banner.jpg";
     scheduleBlink();
 
@@ -587,9 +716,12 @@ export function Watcher38() {
       cancelAnimationFrame(frame);
       window.clearTimeout(blinkTimer);
       window.clearTimeout(blinkCloseTimer);
+      window.clearTimeout(hoverTimer);
+      window.clearTimeout(leaveTimer);
       resizeObserver.disconnect();
       image.removeEventListener("load", resize);
       window.removeEventListener("pointermove", pointerMove);
+      window.removeEventListener("pointerdown", pointerDown);
     };
   }, []);
 
@@ -600,6 +732,7 @@ export function Watcher38() {
       data-mode={mode}
       data-expression={expression}
       data-speaking={speaking ? "true" : "false"}
+      data-hovered={hovered ? "true" : "false"}
     >
       <canvas ref={canvasRef} aria-hidden="true" />
       <div className="watcher38-caption" aria-live="polite">
