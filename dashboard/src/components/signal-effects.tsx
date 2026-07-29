@@ -220,7 +220,7 @@ export function ParticleWord({
       sample.fillText(text, width / 2, height / 2);
 
       const pixels = sample.getImageData(0, 0, width, height).data;
-      const gap = width < 680 ? 6 : 5;
+      const gap = width < 680 ? 5 : 4;
       const next: Particle[] = [];
 
       for (let y = 0; y < height; y += gap) {
@@ -228,8 +228,8 @@ export function ParticleWord({
           const alpha = pixels[(Math.floor(y) * Math.floor(width) + Math.floor(x)) * 4 + 3];
           if (alpha < 120) continue;
           next.push({
-            x: x + (Math.random() - 0.5) * 34,
-            y: y + (Math.random() - 0.5) * 34,
+            x: x + (Math.random() - 0.5) * 24,
+            y: y + (Math.random() - 0.5) * 24,
             homeX: x,
             homeY: y,
             vx: 0,
@@ -239,30 +239,31 @@ export function ParticleWord({
         }
       }
 
-      particles = next.slice(0, width < 680 ? 1300 : 2600);
-      draw();
+      particles = next.slice(0, width < 680 ? 1900 : 4200);
+      draw(0);
     }
 
-    function draw() {
+    function draw(time: number) {
       drawingContext.clearRect(0, 0, width, height);
 
-      for (const particle of particles) {
+      for (let index = 0; index < particles.length; index += 1) {
+        const particle = particles[index];
         if (!reducedMotion) {
           if (pointer.active) {
             const deltaX = particle.x - pointer.x;
             const deltaY = particle.y - pointer.y;
             const distance = Math.hypot(deltaX, deltaY);
-            if (distance < 125 && distance > 0) {
-              const force = (1 - distance / 125) * 1.2;
+            if (distance < 140 && distance > 0) {
+              const force = (1 - distance / 140) * 1.4;
               particle.vx += (deltaX / distance) * force;
               particle.vy += (deltaY / distance) * force;
             }
           }
 
-          particle.vx += (particle.homeX - particle.x) * 0.035;
-          particle.vy += (particle.homeY - particle.y) * 0.035;
-          particle.vx *= 0.82;
-          particle.vy *= 0.82;
+          particle.vx += (particle.homeX - particle.x) * 0.042;
+          particle.vy += (particle.homeY - particle.y) * 0.042;
+          particle.vx *= 0.84;
+          particle.vy *= 0.84;
           particle.x += particle.vx;
           particle.y += particle.vy;
         } else {
@@ -270,18 +271,21 @@ export function ParticleWord({
           particle.y = particle.homeY;
         }
 
-        drawingContext.globalAlpha = 0.72;
+        const shimmer = reducedMotion
+          ? 0.94
+          : 0.82 + Math.sin(time * 0.0022 - particle.homeX * 0.026 + index * 0.008) * 0.16;
+        drawingContext.globalAlpha = shimmer;
         drawingContext.fillStyle = particle.color;
         drawingContext.beginPath();
-        drawingContext.arc(particle.x, particle.y, 1.35, 0, Math.PI * 2);
+        drawingContext.arc(particle.x, particle.y, 1.6, 0, Math.PI * 2);
         drawingContext.fill();
       }
 
       drawingContext.globalAlpha = 1;
     }
 
-    function animate() {
-      if (visible && !document.hidden) draw();
+    function animate(time: number) {
+      if (visible && !document.hidden) draw(time);
       if (!reducedMotion) frame = requestAnimationFrame(animate);
     }
 
