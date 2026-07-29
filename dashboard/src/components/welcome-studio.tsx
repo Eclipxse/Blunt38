@@ -4,6 +4,7 @@ import {
   AlignCenter,
   AlignLeft,
   AlignRight,
+  Check,
   ChevronDown,
   ChevronUp,
   CircleUserRound,
@@ -18,6 +19,7 @@ import {
   MousePointer2,
   Redo2,
   Save,
+  Search,
   Shapes,
   Trash2,
   Type,
@@ -38,13 +40,16 @@ import {
   createImageElement,
   createShapeElement,
   createTextElement,
+  fontCategories,
   fontOptions,
   getVisualPresets,
   getVisualStudioDefinition,
+  loadStudioFonts,
   previewText,
   variableOptions,
   type VisualDocument,
   type VisualElement,
+  type StudioFontOption,
   type VisualStudioType,
   type VisualTemplateEnvelope
 } from "@/lib/visual-document";
@@ -140,6 +145,140 @@ function readImage(file: File) {
   });
 }
 
+function FontPicker({
+  value,
+  onChange
+}: {
+  value: string;
+  onChange: (fontFamily: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const selected =
+    fontOptions.find((font) => font.family === value) ??
+    ({
+      family: value,
+      category: "Clean",
+      preview: "current font"
+    } satisfies StudioFontOption);
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredFonts = useMemo(
+    () =>
+      fontOptions.filter((font) =>
+        `${font.family} ${font.category} ${font.preview}`
+          .toLowerCase()
+          .includes(normalizedQuery)
+      ),
+    [normalizedQuery]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closePicker = (event: MouseEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closePicker);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closePicker);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div className="font-picker" ref={pickerRef}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="font-picker-trigger"
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span
+          className="font-picker-glyph"
+          style={{ fontFamily: `"${selected.family}", sans-serif` }}
+        >
+          Ag
+        </span>
+        <span className="font-picker-current">
+          <strong>{selected.family}</strong>
+          <small>{selected.category}</small>
+        </span>
+        <ChevronDown aria-hidden="true" size={15} />
+      </button>
+
+      {open ? (
+        <div className="font-picker-menu">
+          <label className="font-picker-search">
+            <Search aria-hidden="true" size={14} />
+            <input
+              autoFocus
+              placeholder="Search a vibe..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <div className="font-picker-results" role="listbox">
+            {fontCategories.map((category) => {
+              const categoryFonts = filteredFonts.filter(
+                (font) => font.category === category
+              );
+              if (categoryFonts.length === 0) return null;
+
+              return (
+                <section className="font-picker-category" key={category}>
+                  <div className="font-picker-category-label">
+                    <span>{category}</span>
+                    <b>{categoryFonts.length}</b>
+                  </div>
+                  {categoryFonts.map((font) => {
+                    const isSelected = font.family === value;
+                    return (
+                      <button
+                        aria-pressed={isSelected}
+                        aria-selected={isSelected}
+                        className={isSelected ? "selected" : ""}
+                        key={font.family}
+                        role="option"
+                        type="button"
+                        onClick={() => {
+                          onChange(font.family);
+                          setOpen(false);
+                          setQuery("");
+                        }}
+                      >
+                        <span
+                          className="font-picker-preview"
+                          style={{ fontFamily: `"${font.family}", sans-serif` }}
+                        >
+                          {font.preview}
+                        </span>
+                        <span className="font-picker-name">
+                          {font.family}
+                          {isSelected ? <Check aria-hidden="true" size={13} /> : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </section>
+              );
+            })}
+            {filteredFonts.length === 0 ? (
+              <p className="font-picker-empty">No font matches that mood.</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function VisualStudio({
   guildId,
   guildName,
@@ -169,6 +308,10 @@ export function VisualStudio({
   const canvasRef = useRef<HTMLDivElement>(null);
   const pointerSession = useRef<PointerSession | null>(null);
   const documentRef = useRef(document);
+
+  useEffect(() => {
+    loadStudioFonts();
+  }, []);
 
   useEffect(() => {
     documentRef.current = document;
@@ -1063,18 +1206,13 @@ function ElementInspector({
               </button>
             ))}
           </div>
-          <Control label="Font">
-            <select
+          <div className="inspector-control">
+            <span>Font</span>
+            <FontPicker
               value={element.fontFamily}
-              onChange={(event) => onUpdate({ fontFamily: event.target.value })}
-            >
-              {fontOptions.map((font) => (
-                <option key={font} value={font}>
-                  {font}
-                </option>
-              ))}
-            </select>
-          </Control>
+              onChange={(fontFamily) => onUpdate({ fontFamily })}
+            />
+          </div>
           <div className="control-grid">
             <NumberControl
               label="Size"
