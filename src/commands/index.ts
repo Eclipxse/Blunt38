@@ -14,6 +14,7 @@ import { minigameCommand } from "./minigame.js";
 import { moderateCommand } from "./moderate.js";
 import { musicCommand } from "./music.js";
 import { pollCommand } from "./poll.js";
+import { purgeCommand } from "./purge.js";
 import { roleCommand } from "./role.js";
 import { rolePanelCommand } from "./role-panel.js";
 import { serverBuilderCommand } from "./server-builder.js";
@@ -38,6 +39,7 @@ export const commands: Command[] = [
   rolePanelCommand,
   serverBuilderCommand,
   moderateCommand,
+  purgeCommand,
   pollCommand,
   suggestPanelCommand,
   tempVcCommand,
