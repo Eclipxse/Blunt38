@@ -79,7 +79,7 @@ The heavier command groups have subcommands. The important ones:
 /goodbye set | test | clear
 /music play | pause | resume | skip | stop | queue | nowplaying
        volume | loop | shuffle | remove
-/role give | remove | autorole | clear-autorole | preset
+/role create | permissions | preset | give | remove | autorole | clear-autorole
 /birthday set | remove | list | channel
 /server preview | build | cleanup
 /voice disconnect

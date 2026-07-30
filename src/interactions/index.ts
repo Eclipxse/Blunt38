@@ -6,6 +6,7 @@ import { handleHelpButton } from "./help.js";
 import { handleModerationButton, handleModerationModal } from "./moderation.js";
 import { handleMusicButton } from "./music.js";
 import { handlePollButton } from "./polls.js";
+import { handleRolePermissionComponent } from "./role-permissions.js";
 import { handleRoleSelect } from "./roles.js";
 import { handleSetupComponent, handleSetupModal } from "./setup.js";
 import { handleSuggestionButton, handleSuggestionModal } from "./suggestions.js";
@@ -22,11 +23,13 @@ export async function handleInteraction(interaction: Interaction) {
     if (interaction.customId.startsWith("giveaway:")) return handleGiveawayButton(interaction);
     if (interaction.customId.startsWith("game:")) return handleGameButton(interaction);
     if (interaction.customId.startsWith("music:")) return handleMusicButton(interaction);
+    if (interaction.customId.startsWith("roleperm:")) return handleRolePermissionComponent(interaction);
   }
 
   if (interaction.isStringSelectMenu()) {
     if (interaction.customId === "ticket:kind") return handleTicketComponent(interaction);
     if (interaction.customId.startsWith("roles:select:")) return handleRoleSelect(interaction);
+    if (interaction.customId.startsWith("roleperm:")) return handleRolePermissionComponent(interaction);
   }
 
   if (interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu()) {
