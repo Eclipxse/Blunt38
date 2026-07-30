@@ -65,11 +65,11 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 ```text
 /help           /ai              /setup           /welcome
 /goodbye        /role            /role-panel      /ticket-panel
-/moderate       /server          /poll            /suggest-panel
-/tempvc         /giveaway        /leveling        /rank
-/leaderboard    /embed           /birthday        /serverinfo
-/userinfo       /emoji           /sticker         /minigame
-/music          /voice           /draw
+/moderate       /purge           /server          /poll
+/suggest-panel  /tempvc          /giveaway        /leveling
+/rank           /leaderboard     /embed           /birthday
+/serverinfo     /userinfo        /emoji           /sticker
+/minigame       /music           /voice           /draw
 ```
 
 The heavier command groups have subcommands. The important ones:

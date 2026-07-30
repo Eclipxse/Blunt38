@@ -40,7 +40,7 @@ export async function handleHelpButton(interaction: ButtonInteraction) {
     embeds: [
         panelEmbed("Staff Commands", "STAFF OPS", "Admin tools for roles, moderation, content, and automation.", palette.warning)
         .addFields(
-          { name: "Commands", value: "`/ai setup`\n`/ai persona`\n`/ai disable`\n`/moderate`\n`/role`\n`/welcome`\n`/goodbye`\n`/tempvc`\n`/emoji`\n`/sticker`", inline: false }
+          { name: "Commands", value: "`/ai setup`\n`/ai persona`\n`/ai disable`\n`/moderate`\n`/purge`\n`/role`\n`/welcome`\n`/goodbye`\n`/tempvc`\n`/emoji`\n`/sticker`", inline: false }
         )
     ],
     components: [row]
