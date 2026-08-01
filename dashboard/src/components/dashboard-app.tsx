@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   Home,
   Loader2,
   LogOut,
@@ -9,12 +10,15 @@ import {
   RefreshCw,
   RotateCcw,
   Save,
+  Search,
   Workflow
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { GuildConfig } from "@/lib/guild-config";
 
 import { DashboardLogin } from "@/components/dashboard-login";
+import { CommandPalette } from "@/components/command-palette";
+import { DashboardHealth } from "@/components/dashboard-health";
 import { DashboardSignalBackdrop } from "@/components/signal-effects";
 import { StudioHub } from "@/components/studio-hub";
 import {
@@ -97,12 +101,15 @@ export function DashboardApp() {
     initialRoute.automation
   );
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
   const [studioFocused, setStudioFocused] = useState(false);
   const [loading, setLoading] = useState(true);
   const [configLoading, setConfigLoading] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const selectedGuild = useMemo(
     () => me?.guilds.find((guild) => guild.id === selectedGuildId) ?? null,
@@ -244,6 +251,24 @@ export function DashboardApp() {
   }, [dirty]);
 
   useEffect(() => {
+    const openCommandPalette = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((current) => !current);
+      }
+    };
+
+    window.addEventListener("keydown", openCommandPalette);
+    return () => window.removeEventListener("keydown", openCommandPalette);
+  }, []);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(null), 2_800);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
+  useEffect(() => {
     if (view !== "studio") setStudioFocused(false);
   }, [view]);
 
@@ -303,6 +328,7 @@ export function DashboardApp() {
       );
       setSavedConfig(structuredClone(result.config));
       setDirty(false);
+      setNotice("Changes saved");
       signal38("save-success");
     } catch {
       setError("Save failed because the dashboard API could not be reached.");
@@ -320,6 +346,7 @@ export function DashboardApp() {
         : current
     );
     setDirty(false);
+    setNotice("Changes discarded");
     signal38("discard");
   }
 
@@ -489,8 +516,25 @@ export function DashboardApp() {
           </div>
 
           <div className="topbar-status">
-            <span className="live-dot" />
-            Connected
+            <button
+              className="topbar-command"
+              type="button"
+              aria-label="Open command palette"
+              onClick={() => setCommandOpen(true)}
+            >
+              <Search size={16} />
+              <span>Find</span>
+              <kbd>Ctrl K</kbd>
+            </button>
+            <button
+              className="topbar-health"
+              type="button"
+              aria-label="Open service status"
+              onClick={() => setHealthOpen(true)}
+            >
+              <Activity size={15} />
+              <span>Status</span>
+            </button>
             <button
               type="button"
               aria-label="Refresh server configuration"
@@ -562,6 +606,16 @@ export function DashboardApp() {
         />
       ) : null}
 
+      <DashboardHealth open={healthOpen} onClose={() => setHealthOpen(false)} />
+
+      <CommandPalette
+        open={commandOpen}
+        onClose={() => setCommandOpen(false)}
+        onNavigate={navigate}
+        onAutomation={openAutomation}
+        onCopied={setNotice}
+      />
+
       {dirty ? (
         <div className="unsaved-bar" role="status">
           <span>Unsaved changes</span>
@@ -575,6 +629,8 @@ export function DashboardApp() {
           </button>
         </div>
       ) : null}
+
+      {notice ? <div className="dashboard-toast" role="status">{notice}</div> : null}
     </main>
   );
 }

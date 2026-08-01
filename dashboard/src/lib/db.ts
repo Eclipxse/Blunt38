@@ -8,7 +8,10 @@ export function getPool() {
   if (!pool) {
     pool = new pg.Pool({
       connectionString: getEnv().databaseUrl,
-      ssl: { rejectUnauthorized: false }
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5_000,
+      idleTimeoutMillis: 30_000,
+      max: 8
     });
   }
 

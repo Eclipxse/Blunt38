@@ -163,6 +163,7 @@ export function HomeView({
 
   const attention = systems.filter((system) => !system.enabled);
   const active = systems.filter((system) => system.enabled);
+  const completion = Math.round((active.length / systems.length) * 100);
 
   return (
     <div className="minimal-page">
@@ -171,6 +172,17 @@ export function HomeView({
         title="Server control"
         description="Only the settings that need your attention."
       />
+
+      <section className="setup-progress" aria-label={`${completion}% configured`}>
+        <div>
+          <span>Setup progress</span>
+          <strong>{completion}%</strong>
+        </div>
+        <div className="setup-progress-track">
+          <span style={{ width: `${completion}%` }} />
+        </div>
+        <p>{active.length} of {systems.length} core systems are ready.</p>
+      </section>
 
       {attention.length > 0 ? (
         <section className="minimal-section">
