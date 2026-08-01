@@ -21,7 +21,12 @@ import {
   type UnresolvedTrack
 } from "lavalink-client";
 import { env } from "../env.js";
-import { clampMusicPage, musicPageCount, progressBar } from "../utils/music-control.js";
+import {
+  classifyMusicPlaybackEnd,
+  clampMusicPage,
+  musicPageCount,
+  progressBar
+} from "../utils/music-control.js";
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
@@ -43,6 +48,20 @@ type MusicSearchSession = {
   expiresAt: number;
 };
 
+type MusicPlaybackFailure = {
+  at: number;
+  detail: string;
+  identifier?: string;
+};
+
+type MusicRecoveryState = {
+  originalTitle: string;
+  originalAuthor?: string;
+  attempts: number;
+  attemptedIdentifiers: string[];
+  attemptedSources: SearchPlatform[];
+};
+
 export type MusicFilterPreset = "off" | "balanced" | "bassboost" | "nightcore" | "vaporwave" | "karaoke";
 
 export const musicFilterChoices: Array<{ name: string; value: MusicFilterPreset }> = [
@@ -56,6 +75,7 @@ export const musicFilterChoices: Array<{ name: string; value: MusicFilterPreset 
 
 const musicSearchSessions = new Map<string, MusicSearchSession>();
 const queuePageSize = 8;
+const maxPlaybackRecoveryAttempts = 2;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink, wait until /v4/info responds, then restart the bot so it can attach to a usable node.";
@@ -154,6 +174,20 @@ export function initMusic(client: Client<true>) {
   });
 
   manager.on("trackStart", async (player, track) => {
+    const lastFailure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
+    if (lastFailure && lastFailure.identifier !== track?.info.identifier) {
+      player.deleteData("musicLastPlaybackFailure");
+    }
+
+    const recovery = player.getData<MusicRecoveryState>("musicRecoveryState");
+    if (
+      recovery
+      && track?.info.identifier
+      && !recovery.attemptedIdentifiers.includes(track.info.identifier)
+    ) {
+      player.deleteData("musicRecoveryState");
+    }
+
     const requestedAt = player.getData<number>("musicRequestStartedAt");
     if (Number.isFinite(requestedAt)) {
       console.info(
@@ -212,10 +246,87 @@ export function initMusic(client: Client<true>) {
     if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
   });
 
-  manager.on("queueEnd", async (player) => {
-    const channel = player.textChannelId ? await client.channels.fetch(player.textChannelId).catch(() => null) : null;
-    if (!channel?.isTextBased() || channel.isDMBased()) return;
-    await channel.send({ embeds: [musicEmbed("Queue Finished", "No more tracks in the queue.")] }).catch(() => null);
+  manager.on("trackError", (player, track, payload) => {
+    const detail = playbackFailureDetail(payload);
+    player.setData("musicLastPlaybackFailure", {
+      at: Date.now(),
+      detail,
+      identifier: track?.info.identifier
+    } satisfies MusicPlaybackFailure);
+    console.error(
+      `[music:track-error] guild=${player.guildId} node=${player.node.id} track=${track?.info.identifier ?? "unknown"} detail=${detail}`
+    );
+  });
+
+  manager.on("trackStuck", (player, track, payload) => {
+    const detail = playbackFailureDetail(payload);
+    player.setData("musicLastPlaybackFailure", {
+      at: Date.now(),
+      detail,
+      identifier: track?.info.identifier
+    } satisfies MusicPlaybackFailure);
+    console.error(
+      `[music:track-stuck] guild=${player.guildId} node=${player.node.id} track=${track?.info.identifier ?? "unknown"} detail=${detail}`
+    );
+  });
+
+  manager.on("queueEnd", async (player, track, payload) => {
+    const reason = payload.type === "TrackEndEvent" ? payload.reason : undefined;
+    const endState = classifyMusicPlaybackEnd(payload.type, reason);
+
+    if (endState === "silent") {
+      clearPlaybackRecovery(player);
+      return;
+    }
+
+    if (endState === "failed") {
+      const recovery = await findPlaybackRecovery(player, track, client.user);
+      if (recovery) {
+        await updateMusicPanel(
+          client,
+          player,
+          musicEmbed(
+            "Trying Another Source",
+            `${trackLabel(track)}\nThe first stream died, so I am retrying through **${recovery.sourceLabel}**.`
+          )
+        );
+        await player.queue.add(recovery.track);
+        player.setData("musicRequestStartedAt", performance.now());
+
+        try {
+          await player.play();
+          console.info(
+            `[music:recovery] guild=${player.guildId} node=${player.node.id} source=${recovery.source} track=${recovery.track.info.identifier}`
+          );
+          return;
+        } catch (error) {
+          const detail = playbackFailureDetail(error);
+          player.setData("musicLastPlaybackFailure", {
+            at: Date.now(),
+            detail,
+            identifier: recovery.track.info.identifier
+          } satisfies MusicPlaybackFailure);
+          console.error(`[music:recovery-error] guild=${player.guildId} detail=${detail}`);
+        }
+      }
+
+      const failure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
+      const recentFailure = failure && Date.now() - failure.at < 30_000 ? failure : null;
+      const detail = friendlyPlaybackFailure(recentFailure?.detail ?? playbackFailureDetail(payload));
+      clearPlaybackRecovery(player);
+      await updateMusicPanel(
+        client,
+        player,
+        musicEmbed(
+          "Playback Failed",
+          `${trackLabel(track)}\n${detail}\n\nTry another result or check the Lavalink logs for the exact source error.`
+        )
+      );
+      return;
+    }
+
+    clearPlaybackRecovery(player);
+    await updateMusicPanel(client, player, musicEmbed("Queue Finished", "No more tracks in the queue."));
   });
 
   void manager.init({
@@ -634,6 +745,142 @@ export async function ensureSameVoice(interaction: { guildId: string | null; gui
     throw new Error("Join my voice channel first.");
   }
   return member;
+}
+
+async function updateMusicPanel(client: Client<true>, player: Player, embed: EmbedBuilder) {
+  const channel = player.textChannelId
+    ? await client.channels.fetch(player.textChannelId).catch(() => null)
+    : null;
+  if (!channel?.isTextBased() || channel.isDMBased()) return;
+
+  const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
+  if (panelTarget?.channelId === channel.id && "messages" in channel) {
+    const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+    if (panelMessage) {
+      await panelMessage.edit({
+        content: null,
+        embeds: [embed],
+        components: [],
+        attachments: []
+      }).catch(() => null);
+      return;
+    }
+  }
+
+  const sent = await channel.send({ embeds: [embed] }).catch(() => null);
+  if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
+}
+
+async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | null, requester: User) {
+  if (!failedTrack) return null;
+
+  const failedIdentifier = musicTrackKey(failedTrack);
+  const state = player.getData<MusicRecoveryState>("musicRecoveryState") ?? {
+    originalTitle: failedTrack.info.title,
+    originalAuthor: failedTrack.info.author,
+    attempts: 0,
+    attemptedIdentifiers: failedIdentifier ? [failedIdentifier] : [],
+    attemptedSources: []
+  } satisfies MusicRecoveryState;
+
+  if (state.attempts >= maxPlaybackRecoveryAttempts) return null;
+
+  const query = `${state.originalTitle} ${state.originalAuthor ?? ""}`.trim();
+  for (const source of playbackRecoverySources()) {
+    if (state.attemptedSources.includes(source)) continue;
+    state.attemptedSources.push(source);
+    player.setData("musicRecoveryState", state);
+
+    const result = await player.search({ query, source }, failedTrack.requester ?? requester).catch((error) => {
+      console.error(
+        `[music:recovery-search-error] guild=${player.guildId} source=${source} detail=${playbackFailureDetail(error)}`
+      );
+      return null;
+    });
+    const candidate = result?.tracks.find((track) => {
+      const key = musicTrackKey(track);
+      return Boolean(key) && !state.attemptedIdentifiers.includes(key);
+    });
+    if (!candidate) continue;
+
+    const candidateKey = musicTrackKey(candidate);
+    state.attempts += 1;
+    if (candidateKey) state.attemptedIdentifiers.push(candidateKey);
+    player.setData("musicRecoveryState", state);
+    return {
+      source,
+      sourceLabel: musicSourceLabel(source),
+      track: candidate
+    };
+  }
+
+  return null;
+}
+
+function playbackRecoverySources(): SearchPlatform[] {
+  const configured = env.musicSearchSource as SearchPlatform;
+  const sources: SearchPlatform[] = configured.toString().startsWith("ytm")
+    ? ["ytsearch", "scsearch", configured]
+    : configured.toString().startsWith("yt")
+      ? ["ytmsearch", "scsearch", configured]
+      : [configured, "ytmsearch", "scsearch"];
+  return [...new Set(sources)];
+}
+
+function musicSourceLabel(source: SearchPlatform) {
+  if (source === "ytmsearch") return "YouTube Music";
+  if (source === "ytsearch") return "YouTube";
+  if (source === "scsearch") return "SoundCloud";
+  return String(source);
+}
+
+function musicTrackKey(track: MusicTrack) {
+  return track.info.identifier || track.info.uri || "";
+}
+
+function playbackFailureDetail(payload: unknown) {
+  if (payload instanceof Error) return cleanPlaybackDetail(payload.message);
+  if (!payload || typeof payload !== "object") return "The audio stream ended before playback began.";
+
+  const event = payload as Record<string, unknown>;
+  const exception = event.exception && typeof event.exception === "object"
+    ? event.exception as Record<string, unknown>
+    : null;
+  const details = [
+    exception?.message,
+    exception?.cause,
+    event.error,
+    typeof event.thresholdMs === "number" ? `Track was stuck for ${event.thresholdMs}ms` : null,
+    event.reason === "loadFailed" ? "Lavalink could not load the selected audio stream" : null
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+
+  return cleanPlaybackDetail([...new Set(details)].join(" - ") || "The audio stream ended before playback began.");
+}
+
+function cleanPlaybackDetail(detail: string) {
+  return truncate(detail.replace(/\s+/g, " ").trim(), 600);
+}
+
+function friendlyPlaybackFailure(detail: string) {
+  if (/\b403\b|forbidden/i.test(detail)) {
+    return "The source rejected the audio stream (HTTP 403). Lavalink's YouTube OAuth or source plugin needs attention.";
+  }
+  if (/\b429\b|rate.?limit/i.test(detail)) {
+    return "The source rate-limited this server (HTTP 429). Wait a little or use a different source.";
+  }
+  if (/oauth|sign.?in|login|authentication/i.test(detail)) {
+    return "The source authentication expired or was rejected. Refresh Lavalink's YouTube OAuth session.";
+  }
+  if (/age.?restrict|copyright|not available|region/i.test(detail)) {
+    return "That upload is restricted or unavailable to this Lavalink server.";
+  }
+  return `Lavalink reported: ${truncate(detail.replace(/[`*_~]/g, ""), 400)}`;
+}
+
+function clearPlaybackRecovery(player: Player) {
+  player.deleteData("musicLastPlaybackFailure");
+  player.deleteData("musicRecoveryState");
+  player.deleteData("musicRequestStartedAt");
 }
 
 function filterDescription(preset: MusicFilterPreset) {

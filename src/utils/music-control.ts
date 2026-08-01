@@ -36,3 +36,17 @@ export function musicPageCount(trackCount: number, pageSize = 8) {
 export function clampMusicPage(page: number, trackCount: number, pageSize = 8) {
   return Math.max(0, Math.min(musicPageCount(trackCount, pageSize) - 1, Math.floor(page)));
 }
+
+export type MusicPlaybackEndState = "finished" | "failed" | "silent";
+
+export function classifyMusicPlaybackEnd(eventType: string, reason?: string): MusicPlaybackEndState {
+  if (eventType === "TrackExceptionEvent" || eventType === "TrackStuckEvent" || reason === "loadFailed") {
+    return "failed";
+  }
+
+  if (reason === "stopped" || reason === "replaced" || reason === "cleanup") {
+    return "silent";
+  }
+
+  return "finished";
+}
