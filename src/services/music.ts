@@ -248,26 +248,24 @@ export function initMusic(client: Client<true>) {
 
   manager.on("trackError", (player, track, payload) => {
     const detail = playbackFailureDetail(payload);
-    player.setData("musicLastPlaybackFailure", {
-      at: Date.now(),
-      detail,
-      identifier: track?.info.identifier
-    } satisfies MusicPlaybackFailure);
+    recordPlaybackFailure(player, track, detail);
     console.error(
       `[music:track-error] guild=${player.guildId} node=${player.node.id} track=${track?.info.identifier ?? "unknown"} detail=${detail}`
     );
+    void recoverPlayback(client, player, track, payload).catch((error) => {
+      console.error(`[music:failure-handler-error] guild=${player.guildId}`, error);
+    });
   });
 
   manager.on("trackStuck", (player, track, payload) => {
     const detail = playbackFailureDetail(payload);
-    player.setData("musicLastPlaybackFailure", {
-      at: Date.now(),
-      detail,
-      identifier: track?.info.identifier
-    } satisfies MusicPlaybackFailure);
+    recordPlaybackFailure(player, track, detail);
     console.error(
       `[music:track-stuck] guild=${player.guildId} node=${player.node.id} track=${track?.info.identifier ?? "unknown"} detail=${detail}`
     );
+    void recoverPlayback(client, player, track, payload).catch((error) => {
+      console.error(`[music:failure-handler-error] guild=${player.guildId}`, error);
+    });
   });
 
   manager.on("queueEnd", async (player, track, payload) => {
@@ -275,53 +273,13 @@ export function initMusic(client: Client<true>) {
     const endState = classifyMusicPlaybackEnd(payload.type, reason);
 
     if (endState === "silent") {
+      if (player.getData<boolean>("musicRecoveryInFlight")) return;
       clearPlaybackRecovery(player);
       return;
     }
 
     if (endState === "failed") {
-      const recovery = await findPlaybackRecovery(player, track, client.user);
-      if (recovery) {
-        await updateMusicPanel(
-          client,
-          player,
-          musicEmbed(
-            "Trying Another Source",
-            `${trackLabel(track)}\nThe first stream died, so I am retrying through **${recovery.sourceLabel}**.`
-          )
-        );
-        await player.queue.add(recovery.track);
-        player.setData("musicRequestStartedAt", performance.now());
-
-        try {
-          await player.play();
-          console.info(
-            `[music:recovery] guild=${player.guildId} node=${player.node.id} source=${recovery.source} track=${recovery.track.info.identifier}`
-          );
-          return;
-        } catch (error) {
-          const detail = playbackFailureDetail(error);
-          player.setData("musicLastPlaybackFailure", {
-            at: Date.now(),
-            detail,
-            identifier: recovery.track.info.identifier
-          } satisfies MusicPlaybackFailure);
-          console.error(`[music:recovery-error] guild=${player.guildId} detail=${detail}`);
-        }
-      }
-
-      const failure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
-      const recentFailure = failure && Date.now() - failure.at < 30_000 ? failure : null;
-      const detail = friendlyPlaybackFailure(recentFailure?.detail ?? playbackFailureDetail(payload));
-      clearPlaybackRecovery(player);
-      await updateMusicPanel(
-        client,
-        player,
-        musicEmbed(
-          "Playback Failed",
-          `${trackLabel(track)}\n${detail}\n\nTry another result or check the Lavalink logs for the exact source error.`
-        )
-      );
+      await recoverPlayback(client, player, track, payload);
       return;
     }
 
@@ -771,6 +729,71 @@ async function updateMusicPanel(client: Client<true>, player: Player, embed: Emb
   if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
 }
 
+async function recoverPlayback(
+  client: Client<true>,
+  player: Player,
+  failedTrack: MusicTrack | null,
+  payload: unknown
+) {
+  if (player.getData<boolean>("musicRecoveryInFlight")) return;
+  player.setData("musicRecoveryInFlight", true);
+
+  try {
+    const recovery = await findPlaybackRecovery(player, failedTrack, client.user);
+    if (recovery) {
+      await updateMusicPanel(
+        client,
+        player,
+        musicEmbed(
+          "Trying Another Source",
+          `${trackLabel(failedTrack)}\nThe stream froze, so I am retrying through **${recovery.sourceLabel}**.`
+        )
+      );
+      player.setData("musicRequestStartedAt", performance.now());
+
+      try {
+        await player.play({
+          clientTrack: recovery.track,
+          noReplace: false,
+          paused: false,
+          position: 0
+        });
+        console.info(
+          `[music:recovery] guild=${player.guildId} node=${player.node.id} source=${recovery.source} track=${recovery.track.info.identifier}`
+        );
+        return;
+      } catch (error) {
+        const detail = playbackFailureDetail(error);
+        recordPlaybackFailure(player, recovery.track, detail);
+        console.error(`[music:recovery-error] guild=${player.guildId} detail=${detail}`);
+      }
+    }
+
+    const failure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
+    const recentFailure = failure && Date.now() - failure.at < 30_000 ? failure : null;
+    const detail = friendlyPlaybackFailure(recentFailure?.detail ?? playbackFailureDetail(payload));
+    clearPlaybackRecovery(player);
+    await updateMusicPanel(
+      client,
+      player,
+      musicEmbed(
+        "Playback Failed",
+        `${trackLabel(failedTrack)}\n${detail}\n\nTry another result or check the Lavalink logs for the exact source error.`
+      )
+    );
+  } finally {
+    player.deleteData("musicRecoveryInFlight");
+  }
+}
+
+function recordPlaybackFailure(player: Player, track: MusicTrack | null, detail: string) {
+  player.setData("musicLastPlaybackFailure", {
+    at: Date.now(),
+    detail,
+    identifier: track?.info.identifier
+  } satisfies MusicPlaybackFailure);
+}
+
 async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | null, requester: User) {
   if (!failedTrack) return null;
 
@@ -820,9 +843,9 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
 function playbackRecoverySources(): SearchPlatform[] {
   const configured = env.musicSearchSource as SearchPlatform;
   const sources: SearchPlatform[] = configured.toString().startsWith("ytm")
-    ? ["ytsearch", "scsearch", configured]
+    ? ["scsearch", "ytsearch", configured]
     : configured.toString().startsWith("yt")
-      ? ["ytmsearch", "scsearch", configured]
+      ? ["scsearch", "ytmsearch", configured]
       : [configured, "ytmsearch", "scsearch"];
   return [...new Set(sources)];
 }
