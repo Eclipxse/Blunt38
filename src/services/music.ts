@@ -31,6 +31,11 @@ import {
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
+import {
+  resolveYoutubeAudio,
+  shouldResolveYoutubeInput,
+  type ResolvedYoutubeAudio
+} from "./youtube-resolver.js";
 
 let manager: LavalinkManager | null = null;
 
@@ -175,6 +180,8 @@ export function initMusic(client: Client<true>) {
   });
 
   manager.on("trackStart", async (player, track) => {
+    applyYoutubeResolverMetadata(track);
+
     const lastFailure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
     if (lastFailure && lastFailure.identifier !== track?.info.identifier) {
       player.deleteData("musicLastPlaybackFailure");
@@ -366,6 +373,7 @@ export async function createOrGetMusicPlayer(interaction: MusicInteraction) {
 export async function playQuery(interaction: ChatInputCommandInteraction, query: string) {
   const startedAt = performance.now();
   const { player, shouldConnect } = await createOrGetMusicPlayer(interaction);
+  const useYtDlp = env.musicYtDlpEnabled && shouldResolveYoutubeInput(query);
   const searchQuery = isUrl(query)
     ? query
     : { query, source: env.musicSearchSource as SearchPlatform };
@@ -374,7 +382,9 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   let searchMs = 0;
   let connectMs = 0;
 
-  const searchPromise = player.search(searchQuery, interaction.user)
+  const searchPromise = (useYtDlp
+    ? searchYoutubeWithYtDlp(player, query, interaction.user)
+    : player.search(searchQuery, interaction.user))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
       return result;
@@ -430,7 +440,7 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   }
 
   console.info(
-    `[music:play] guild=${interaction.guildId} node=${player.node.id} source=${isUrl(query) ? "url" : env.musicSearchSource} `
+    `[music:play] guild=${interaction.guildId} node=${player.node.id} source=${useYtDlp ? "yt-dlp" : isUrl(query) ? "url" : env.musicSearchSource} `
     + `connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
   );
 
@@ -796,7 +806,7 @@ function recordPlaybackFailure(player: Player, track: MusicTrack | null, detail:
 }
 
 async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | null, requester: User) {
-  if (!failedTrack) return null;
+  if (!failedTrack || isYoutubeTrack(failedTrack)) return null;
 
   const failedIdentifier = musicTrackKey(failedTrack);
   const state = player.getData<MusicRecoveryState>("musicRecoveryState") ?? {
@@ -867,6 +877,69 @@ function musicSourceLabel(source: SearchPlatform) {
 
 function musicTrackKey(track: MusicTrack) {
   return track.info.identifier || track.info.uri || "";
+}
+
+async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User) {
+  const resolved = await resolveYoutubeAudio({
+    query,
+    executable: env.musicYtDlpPath,
+    timeoutMs: env.musicYtDlpTimeoutMs
+  });
+  const result = await player.search(resolved.streamUrl, requester);
+  const track = result.tracks[0];
+  if (!track) throw new Error("yt-dlp resolved the video, but Lavalink could not load its audio stream.");
+
+  track.userData = {
+    ...track.userData,
+    blunt38Resolver: "yt-dlp",
+    blunt38YoutubeId: resolved.id,
+    blunt38Title: resolved.title,
+    blunt38Author: resolved.author,
+    blunt38DurationMs: resolved.durationMs,
+    blunt38WebpageUrl: resolved.webpageUrl,
+    blunt38ArtworkUrl: resolved.artworkUrl,
+    blunt38IsLive: resolved.isLive ? "true" : "false"
+  };
+  applyResolvedYoutubeInfo(track, resolved);
+  return result;
+}
+
+function applyYoutubeResolverMetadata(track: MusicTrack | null) {
+  if (!track || track.userData?.blunt38Resolver !== "yt-dlp") return;
+  const data = track.userData;
+  const durationMs = typeof data.blunt38DurationMs === "number" ? data.blunt38DurationMs : 0;
+  applyResolvedYoutubeInfo(track, {
+    id: String(data.blunt38YoutubeId ?? track.info.identifier ?? "youtube"),
+    title: String(data.blunt38Title ?? track.info.title ?? "YouTube"),
+    author: String(data.blunt38Author ?? track.info.author ?? "YouTube"),
+    durationMs,
+    webpageUrl: String(data.blunt38WebpageUrl ?? track.info.uri ?? ""),
+    artworkUrl: typeof data.blunt38ArtworkUrl === "string" ? data.blunt38ArtworkUrl : null,
+    streamUrl: "",
+    isLive: data.blunt38IsLive === "true"
+  });
+}
+
+function applyResolvedYoutubeInfo(track: MusicTrack, resolved: ResolvedYoutubeAudio) {
+  track.info.identifier = resolved.id;
+  track.info.title = resolved.title;
+  track.info.author = resolved.author;
+  track.info.duration = resolved.durationMs;
+  track.info.uri = resolved.webpageUrl;
+  track.info.artworkUrl = resolved.artworkUrl;
+  track.info.sourceName = "youtube";
+  track.info.isStream = resolved.isLive;
+  track.info.isSeekable = !resolved.isLive;
+}
+
+function isYoutubeTrack(track: MusicTrack) {
+  if (track.userData?.blunt38Resolver === "yt-dlp") return true;
+  try {
+    const host = new URL(track.info.uri ?? "").hostname.toLowerCase().replace(/^www\./, "");
+    return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
+  } catch {
+    return track.info.sourceName === "youtube" || track.info.sourceName === "youtubemusic";
+  }
 }
 
 function playbackFailureDetail(payload: unknown) {

@@ -20,6 +20,7 @@ const aiTimeoutMs = Number.parseInt(process.env.AI_TIMEOUT_MS ?? "15000", 10);
 const lavalinkPort = Number.parseInt(process.env.LAVALINK_PORT ?? "2333", 10);
 const drawGamePort = Number.parseInt(process.env.DRAW_GAME_PORT ?? "8787", 10);
 const musicDefaultVolume = Number.parseInt(process.env.MUSIC_DEFAULT_VOLUME ?? "80", 10);
+const musicYtDlpTimeoutMs = Number.parseInt(process.env.MUSIC_YTDLP_TIMEOUT_MS ?? "25000", 10);
 const storageDriverRaw = process.env.STORAGE_DRIVER?.trim().toLowerCase();
 const voiceControlUserIds = (process.env.VOICE_CONTROL_USER_IDS ?? "")
   .split(",")
@@ -53,6 +54,11 @@ export const env = {
   lavalinkSecure: process.env.LAVALINK_SECURE === "true",
   musicSearchSource: process.env.MUSIC_SEARCH_SOURCE?.trim() || "ytsearch",
   musicDefaultVolume: Number.isFinite(musicDefaultVolume) ? Math.max(1, Math.min(100, musicDefaultVolume)) : 80,
+  musicYtDlpEnabled: process.env.MUSIC_YTDLP_ENABLED === "true",
+  musicYtDlpPath: process.env.MUSIC_YTDLP_PATH?.trim() || "yt-dlp",
+  musicYtDlpTimeoutMs: Number.isFinite(musicYtDlpTimeoutMs)
+    ? Math.max(5000, Math.min(60000, musicYtDlpTimeoutMs))
+    : 25000,
   drawGameEnabled: process.env.DRAW_GAME_ENABLED !== "false",
   drawGamePort: Number.isFinite(drawGamePort) ? drawGamePort : 8787,
   drawGamePublicUrl: process.env.DRAW_GAME_PUBLIC_URL?.trim() || `http://localhost:${Number.isFinite(drawGamePort) ? drawGamePort : 8787}`,
