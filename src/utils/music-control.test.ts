@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  classifyMusicPlaybackEnd,
   clampMusicPage,
   musicPageCount,
   parseSeekPosition,
@@ -24,4 +25,13 @@ test("queue page helpers handle empty and overflowing pages", () => {
   assert.equal(musicPageCount(17), 3);
   assert.equal(clampMusicPage(9, 17), 2);
   assert.equal(clampMusicPage(-2, 17), 0);
+});
+
+test("playback end classification separates failures from normal endings", () => {
+  assert.equal(classifyMusicPlaybackEnd("TrackEndEvent", "finished"), "finished");
+  assert.equal(classifyMusicPlaybackEnd("TrackEndEvent", "loadFailed"), "failed");
+  assert.equal(classifyMusicPlaybackEnd("TrackExceptionEvent"), "failed");
+  assert.equal(classifyMusicPlaybackEnd("TrackStuckEvent"), "failed");
+  assert.equal(classifyMusicPlaybackEnd("TrackEndEvent", "stopped"), "silent");
+  assert.equal(classifyMusicPlaybackEnd("TrackEndEvent", "cleanup"), "silent");
 });
