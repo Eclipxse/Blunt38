@@ -52,10 +52,12 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     clients:
+      # MUSIC handles ytmsearch metadata. TV uses the OAuth session for playback.
+      - MUSIC
+      - TV
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED
-      - MUSIC
   # lavasrc:
   #   providers:
   #     - "ytsearch:%ISRC%"

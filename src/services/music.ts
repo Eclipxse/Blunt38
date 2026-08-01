@@ -24,6 +24,7 @@ import { env } from "../env.js";
 import {
   classifyMusicPlaybackEnd,
   clampMusicPage,
+  isConfidentMusicMatch,
   musicPageCount,
   progressBar
 } from "../utils/music-control.js";
@@ -822,7 +823,14 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
     });
     const candidate = result?.tracks.find((track) => {
       const key = musicTrackKey(track);
-      return Boolean(key) && !state.attemptedIdentifiers.includes(key);
+      return Boolean(key)
+        && !state.attemptedIdentifiers.includes(key)
+        && isConfidentMusicMatch(
+          state.originalTitle,
+          state.originalAuthor,
+          track.info.title,
+          track.info.author
+        );
     });
     if (!candidate) continue;
 
