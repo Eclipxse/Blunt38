@@ -1,11 +1,15 @@
+import { randomUUID } from "node:crypto";
 import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
   Client,
   EmbedBuilder,
+  PermissionFlagsBits,
+  StringSelectMenuBuilder,
   type ChatInputCommandInteraction,
   type GuildMember,
+  type StringSelectMenuInteraction,
   type User
 } from "discord.js";
 import {
@@ -17,7 +21,9 @@ import {
   type UnresolvedTrack
 } from "lavalink-client";
 import { env } from "../env.js";
+import { clampMusicPage, musicPageCount, progressBar } from "../utils/music-control.js";
 import { palette } from "../utils/ui.js";
+import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
 
 let manager: LavalinkManager | null = null;
@@ -26,6 +32,30 @@ type MusicPanelTarget = {
   channelId: string;
   messageId: string;
 };
+
+type MusicInteraction = ChatInputCommandInteraction | StringSelectMenuInteraction;
+type MusicTrack = Track | UnresolvedTrack;
+
+type MusicSearchSession = {
+  guildId: string;
+  userId: string;
+  tracks: MusicTrack[];
+  expiresAt: number;
+};
+
+export type MusicFilterPreset = "off" | "balanced" | "bassboost" | "nightcore" | "vaporwave" | "karaoke";
+
+export const musicFilterChoices: Array<{ name: string; value: MusicFilterPreset }> = [
+  { name: "Off / Original", value: "off" },
+  { name: "Balanced", value: "balanced" },
+  { name: "Bass Boost", value: "bassboost" },
+  { name: "Nightcore", value: "nightcore" },
+  { name: "Vaporwave", value: "vaporwave" },
+  { name: "Karaoke", value: "karaoke" }
+];
+
+const musicSearchSessions = new Map<string, MusicSearchSession>();
+const queuePageSize = 8;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink, wait until /v4/info responds, then restart the bot so it can attach to a usable node.";
@@ -76,7 +106,37 @@ export function initMusic(client: Client<true>) {
         autoReconnect: true,
         destroyPlayer: false
       },
+      minAutoPlayMs: 4_000,
       onEmptyQueue: {
+        autoPlayFunction: async (player, lastTrack) => {
+          if (!player.getData<boolean>("musicAutoplayEnabled")) return;
+
+          try {
+            const requester = lastTrack.requester ?? client.user;
+            const result = await player.search(
+              {
+                query: `${lastTrack.info.author ?? "music"} mix`,
+                source: env.musicSearchSource as SearchPlatform
+              },
+              requester
+            );
+            const recentIds = new Set([
+              lastTrack.info.identifier,
+              ...player.queue.previous.slice(0, 8).map((track) => track.info.identifier)
+            ]);
+            const recommendation = result.tracks.find((track) => {
+              return !track.info.identifier || !recentIds.has(track.info.identifier);
+            });
+            if (!recommendation) return;
+
+            player.queue.add(recommendation);
+            console.info(
+              `[music:autoplay] guild=${player.guildId} picked=${recommendation.info.identifier}`
+            );
+          } catch (error) {
+            console.error(`[music:autoplay-error] guild=${player.guildId}`, error);
+          }
+        },
         destroyAfterMs: 60_000
       }
     },
@@ -182,7 +242,7 @@ export function musicIsReady() {
   return Boolean(manager?.useable);
 }
 
-export async function createOrGetMusicPlayer(interaction: ChatInputCommandInteraction) {
+export async function createOrGetMusicPlayer(interaction: MusicInteraction) {
   if (!interaction.guild || !interaction.guildId) {
     throw new Error("Music commands only work in servers.");
   }
@@ -203,14 +263,29 @@ export async function createOrGetMusicPlayer(interaction: ChatInputCommandIntera
     throw new Error("I am already playing in another voice channel.");
   }
 
+  const existingPlayer = manager.getPlayer(interaction.guildId);
+  const config = existingPlayer
+    ? null
+    : await getGuildConfig(interaction.guildId).catch((error) => {
+        console.error(`[music:config-error] guild=${interaction.guildId}`, error);
+        return null;
+      });
+  const defaultVolume = Math.max(1, Math.min(100, config?.musicDefaultVolume ?? env.musicDefaultVolume));
+
   const player = manager.createPlayer({
     guildId: interaction.guildId,
     voiceChannelId,
     textChannelId: interaction.channelId,
     selfDeaf: true,
     selfMute: false,
-    volume: env.musicDefaultVolume
+    volume: defaultVolume
   });
+
+  if (!existingPlayer) {
+    if (config?.musicDjRoleId) player.setData("musicDjRoleId", config.musicDjRoleId);
+    player.setData("musicAutoplayEnabled", config?.musicAutoplayEnabled ?? false);
+    player.setData("musicFilterPreset", "off");
+  }
 
   return {
     player,
@@ -292,6 +367,113 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   return { player, result, added: tracks, startsPlayback };
 }
 
+export async function createMusicSearch(interaction: ChatInputCommandInteraction, query: string) {
+  const { player } = await createOrGetMusicPlayer(interaction);
+  const result = await player.search(
+    { query, source: env.musicSearchSource as SearchPlatform },
+    interaction.user
+  ).catch((error: unknown) => explainLavalinkError(error));
+  const tracks = result.tracks.slice(0, 5);
+  if (!tracks.length) throw new Error("No tracks found.");
+
+  const sessionId = randomUUID().replaceAll("-", "").slice(0, 16);
+  musicSearchSessions.set(sessionId, {
+    guildId: interaction.guildId!,
+    userId: interaction.user.id,
+    tracks,
+    expiresAt: Date.now() + 5 * 60_000
+  });
+
+  return { sessionId, tracks };
+}
+
+export function musicSearchRow(sessionId: string, tracks: MusicTrack[]) {
+  return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(`music:search:${sessionId}`)
+      .setPlaceholder("Pick the exact track")
+      .addOptions(
+        tracks.map((track, index) => ({
+          label: truncate(track.info.title, 100),
+          description: truncate(`${track.info.author ?? "Unknown"} - ${formatTrackDuration(track)}`, 100),
+          value: String(index)
+        }))
+      )
+  );
+}
+
+export function consumeMusicSearchSession(sessionId: string, userId: string, guildId: string) {
+  const now = Date.now();
+  for (const [id, session] of musicSearchSessions) {
+    if (session.expiresAt <= now) musicSearchSessions.delete(id);
+  }
+
+  const session = musicSearchSessions.get(sessionId);
+  if (!session || session.expiresAt <= now) throw new Error("That search expired. Run `/music search` again.");
+  if (session.userId !== userId) throw new Error("That track picker belongs to someone else.");
+  if (session.guildId !== guildId) throw new Error("That track picker belongs to another server.");
+
+  musicSearchSessions.delete(sessionId);
+  return session;
+}
+
+export async function queueSearchResult(interaction: StringSelectMenuInteraction, track: MusicTrack) {
+  const startedAt = performance.now();
+  const { player, shouldConnect } = await createOrGetMusicPlayer(interaction);
+  if (shouldConnect) await player.connect().catch((error: unknown) => explainLavalinkError(error));
+
+  player.queue.add(track);
+  const startsPlayback = !player.playing && !player.paused;
+  if (startsPlayback) {
+    player.setData("musicRequestStartedAt", startedAt);
+    await player.play().catch((error: unknown) => explainLavalinkError(error));
+  }
+
+  return { player, startsPlayback };
+}
+
+export async function applyMusicFilter(player: Player, preset: MusicFilterPreset) {
+  await player.filterManager.resetFilters();
+
+  if (preset === "balanced") await player.filterManager.setEQPreset("BetterMusic");
+  if (preset === "bassboost") await player.filterManager.setEQPreset("BassboostMedium");
+  if (preset === "nightcore") await player.filterManager.toggleNightcore(1.15, 1.15, 1);
+  if (preset === "vaporwave") await player.filterManager.toggleVaporwave(0.9, 0.85, 1);
+  if (preset === "karaoke") await player.filterManager.toggleKaraoke();
+
+  player.setData("musicFilterPreset", preset);
+}
+
+export function isMusicFilterPreset(value: string): value is MusicFilterPreset {
+  return musicFilterChoices.some((choice) => choice.value === value);
+}
+
+export async function ensureMusicController(
+  interaction: { guildId: string | null; guild?: { members: { fetch(userId: string): Promise<GuildMember> } } | null; user: { id: string } },
+  player: Player
+) {
+  const member = await ensureSameVoice(interaction, player);
+  const djRoleId = player.getData<string>("musicDjRoleId");
+  if (!djRoleId) return member;
+
+  const bypass = member.permissions.has(PermissionFlagsBits.ManageGuild)
+    || member.permissions.has(PermissionFlagsBits.MoveMembers)
+    || member.roles.cache.has(djRoleId);
+  if (!bypass) throw new Error(`You need the <@&${djRoleId}> role to control this player.`);
+  return member;
+}
+
+export function setPlayerMusicSettings(player: Player, input: {
+  djRoleId?: string | null;
+  autoplayEnabled?: boolean;
+}) {
+  if (input.djRoleId === null) player.deleteData("musicDjRoleId");
+  if (typeof input.djRoleId === "string") player.setData("musicDjRoleId", input.djRoleId);
+  if (typeof input.autoplayEnabled === "boolean") {
+    player.setData("musicAutoplayEnabled", input.autoplayEnabled);
+  }
+}
+
 export function getRequesterName(track?: Track | UnresolvedTrack | null) {
   const requester = track?.requester as GuildMember | { username?: string; tag?: string } | undefined;
   if (!requester) return "Unknown";
@@ -331,11 +513,20 @@ export function musicEmbed(title: string, description: string) {
 }
 
 export function nowPlayingEmbed(player: Player, track = player.queue.current) {
+  const duration = track?.info.duration ?? 0;
+  const position = Math.max(0, player.position ?? 0);
+  const progress = track?.info.isStream
+    ? "`LIVE`"
+    : `\`${formatMs(position)}\` ${progressBar(position, duration)} \`${formatMs(duration)}\``;
+  const filter = player.getData<MusicFilterPreset>("musicFilterPreset") ?? "off";
+  const autoplay = player.getData<boolean>("musicAutoplayEnabled") ?? false;
   const built = musicEmbed("Now Playing", trackLabel(track))
     .addFields(
-      { name: "Duration", value: `\`${formatTrackDuration(track)}\``, inline: true },
+      { name: "Progress", value: progress, inline: false },
       { name: "Volume", value: `\`${player.volume}%\``, inline: true },
       { name: "Loop", value: `\`${player.repeatMode}\``, inline: true },
+      { name: "Filter", value: `\`${filter}\``, inline: true },
+      { name: "Autoplay", value: autoplay ? "`on`" : "`off`", inline: true },
       { name: "Requested By", value: getRequesterName(track), inline: true },
       { name: "Queue", value: `\`${player.queue.tracks.length} track(s)\``, inline: true }
     );
@@ -345,18 +536,30 @@ export function nowPlayingEmbed(player: Player, track = player.queue.current) {
   return built;
 }
 
-export function queueEmbed(player: Player) {
+export function queueEmbed(player: Player, requestedPage = 0) {
+  const page = clampMusicPage(requestedPage, player.queue.tracks.length, queuePageSize);
+  const pages = musicPageCount(player.queue.tracks.length, queuePageSize);
+  const start = page * queuePageSize;
   const current = player.queue.current ? `**Now:** ${player.queue.current.info.title}` : "**Now:** Nothing playing";
-  const upcoming = player.queue.tracks.slice(0, 10).map((track, index) => {
-    return `\`${index + 1}.\` ${track.info.title} - ${formatTrackDuration(track)}`;
+  const upcoming = player.queue.tracks.slice(start, start + queuePageSize).map((track, index) => {
+    return `\`${start + index + 1}.\` ${track.info.title} - ${formatTrackDuration(track)}`;
   });
+  const totalDuration = player.queue.tracks.reduce((sum, track) => {
+    return track.info.isStream ? sum : sum + (track.info.duration ?? 0);
+  }, 0);
 
-  return musicEmbed("Music Queue", [current, "", upcoming.length ? upcoming.join("\n") : "No upcoming tracks."].join("\n"))
-    .addFields({ name: "Total Upcoming", value: `\`${player.queue.tracks.length}\``, inline: true });
+  return musicEmbed(
+    `Music Queue - Page ${page + 1}/${pages}`,
+    [current, "", upcoming.length ? upcoming.join("\n") : "No upcoming tracks."].join("\n")
+  ).addFields(
+    { name: "Upcoming", value: `\`${player.queue.tracks.length}\``, inline: true },
+    { name: "Queue Time", value: `\`${formatMs(totalDuration)}\``, inline: true }
+  );
 }
 
 export function musicControlRows(player?: Player) {
   const paused = Boolean(player?.paused);
+  const autoplay = player?.getData<boolean>("musicAutoplayEnabled") ?? false;
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -364,10 +567,62 @@ export function musicControlRows(player?: Player) {
         .setEmoji(paused ? "▶️" : "⏸️")
         .setLabel(paused ? "Resume" : "Pause")
         .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("music:previous").setEmoji("⏮️").setLabel("Previous").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("music:skip").setEmoji("⏭️").setLabel("Skip").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:stop").setEmoji("🛑").setLabel("Stop").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("music:loop").setEmoji("🔁").setLabel("Loop").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:queue").setEmoji("🧺").setLabel("Queue").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("music:stop").setEmoji("⏹️").setLabel("Stop").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("music:loop")
+        .setEmoji("🔁")
+        .setLabel(`Loop: ${player?.repeatMode ?? "off"}`)
+        .setStyle(player?.repeatMode === "off" ? ButtonStyle.Secondary : ButtonStyle.Success)
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("music:replay").setEmoji("↩️").setLabel("Replay").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("music:shuffle").setEmoji("🔀").setLabel("Shuffle").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder()
+        .setCustomId("music:autoplay")
+        .setEmoji("♾️")
+        .setLabel(`Auto: ${autoplay ? "on" : "off"}`)
+        .setStyle(autoplay ? ButtonStyle.Success : ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("music:queue:0").setEmoji("📜").setLabel("Queue").setStyle(ButtonStyle.Secondary)
+    ),
+    new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("music:filter")
+        .setPlaceholder(`Sound filter: ${player?.getData<MusicFilterPreset>("musicFilterPreset") ?? "off"}`)
+        .addOptions(musicFilterChoices.map((choice) => ({
+          label: choice.name,
+          value: choice.value,
+          description: filterDescription(choice.value)
+        })))
+    )
+  ];
+}
+
+export function musicQueueRows(player: Player, requestedPage = 0) {
+  const page = clampMusicPage(requestedPage, player.queue.tracks.length, queuePageSize);
+  const pages = musicPageCount(player.queue.tracks.length, queuePageSize);
+  return [
+    ...musicControlRows(player),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`music:queue:${page - 1}`)
+        .setEmoji("⬅️")
+        .setLabel("Previous page")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page <= 0),
+      new ButtonBuilder()
+        .setCustomId(`music:queue:${page + 1}`)
+        .setEmoji("➡️")
+        .setLabel("Next page")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(page >= pages - 1),
+      new ButtonBuilder()
+        .setCustomId("music:clear")
+        .setEmoji("🧹")
+        .setLabel("Clear upcoming")
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(player.queue.tracks.length === 0)
     )
   ];
 }
@@ -378,6 +633,21 @@ export async function ensureSameVoice(interaction: { guildId: string | null; gui
   if (!member.voice.channelId || member.voice.channelId !== player.voiceChannelId) {
     throw new Error("Join my voice channel first.");
   }
+  return member;
+}
+
+function filterDescription(preset: MusicFilterPreset) {
+  if (preset === "off") return "Original audio with every filter removed";
+  if (preset === "balanced") return "A cleaner, fuller everyday EQ";
+  if (preset === "bassboost") return "Medium low-end boost without destroying the mix";
+  if (preset === "nightcore") return "Faster playback with a higher pitch";
+  if (preset === "vaporwave") return "Slower playback with a lower pitch";
+  return "Reduce centered vocals when the source allows it";
+}
+
+function truncate(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function isUrl(value: string) {

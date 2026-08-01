@@ -559,6 +559,9 @@ async function wireBotConfig(guildId: string, template: ServerTemplate, context:
     aiResponderChannelId: textChannel(context.channels.get("ai"))?.id,
     aiResponderPrompt: template.aiPrompt,
     aiResponderPersona: "genz-girl",
+    musicDjRoleId: context.roles.get("dj")?.id,
+    musicDefaultVolume: 80,
+    musicAutoplayEnabled: false,
     accentColor: template.accent
   });
 }
@@ -669,7 +672,8 @@ async function cleanup(interaction: Parameters<Command["execute"]>[0]) {
     levelingEnabled: false,
     levelUpChannelId: undefined,
     aiResponderEnabled: false,
-    aiResponderChannelId: undefined
+    aiResponderChannelId: undefined,
+    musicDjRoleId: undefined
   });
 
   await interaction.editReply({

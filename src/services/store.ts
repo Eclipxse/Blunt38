@@ -43,6 +43,9 @@ type GuildConfigRow = {
   ai_responder_channel_id: string | null;
   ai_responder_prompt: string | null;
   ai_responder_persona: GuildConfig["aiResponderPersona"] | null;
+  music_dj_role_id: string | null;
+  music_default_volume: number | null;
+  music_autoplay_enabled: boolean | null;
   accent_color: number | null;
 };
 
@@ -139,6 +142,9 @@ function toGuildConfig(row: GuildConfigRow): GuildConfig {
     aiResponderChannelId: row.ai_responder_channel_id ?? undefined,
     aiResponderPrompt: row.ai_responder_prompt ?? undefined,
     aiResponderPersona: row.ai_responder_persona ?? undefined,
+    musicDjRoleId: row.music_dj_role_id ?? undefined,
+    musicDefaultVolume: row.music_default_volume ?? 80,
+    musicAutoplayEnabled: row.music_autoplay_enabled ?? false,
     accentColor: row.accent_color ?? undefined
   };
 }
@@ -276,14 +282,14 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         temp_voice_join_channel_id, temp_voice_category_id, birthday_channel_id, last_birthday_run,
         leveling_enabled, level_up_channel_id, starboard_channel_id, starboard_threshold,
         ai_responder_enabled, ai_responder_channel_id, ai_responder_prompt, ai_responder_persona,
-        accent_color
+        music_dj_role_id, music_default_volume, music_autoplay_enabled, accent_color
       ) values (
         $1, $2, $3, $4, $5,
         $6, $7, $8, $9, $10,
         $11, $12, $13, $14,
         $15, $16, $17, $18,
         $19, $20, $21, $22,
-        $23
+        $23, $24, $25, $26
       )
       on conflict (guild_id) do update set
         welcome_channel_id = excluded.welcome_channel_id,
@@ -307,6 +313,9 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         ai_responder_channel_id = excluded.ai_responder_channel_id,
         ai_responder_prompt = excluded.ai_responder_prompt,
         ai_responder_persona = excluded.ai_responder_persona,
+        music_dj_role_id = excluded.music_dj_role_id,
+        music_default_volume = excluded.music_default_volume,
+        music_autoplay_enabled = excluded.music_autoplay_enabled,
         accent_color = excluded.accent_color`,
       [
         guildId,
@@ -331,6 +340,9 @@ export async function updateGuildConfig(guildId: string, patch: Partial<GuildCon
         nullable(next.aiResponderChannelId),
         nullable(next.aiResponderPrompt),
         nullable(next.aiResponderPersona),
+        nullable(next.musicDjRoleId),
+        Math.max(1, Math.min(100, next.musicDefaultVolume ?? 80)),
+        next.musicAutoplayEnabled ?? false,
         nullable(next.accentColor)
       ]
     );

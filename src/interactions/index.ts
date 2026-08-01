@@ -4,7 +4,7 @@ import { handleGameButton } from "./games.js";
 import { handleGiveawayButton } from "./giveaways.js";
 import { handleHelpButton } from "./help.js";
 import { handleModerationButton, handleModerationModal } from "./moderation.js";
-import { handleMusicButton } from "./music.js";
+import { handleMusicButton, handleMusicSelect } from "./music.js";
 import { handlePollButton } from "./polls.js";
 import { handleRolePermissionComponent } from "./role-permissions.js";
 import { handleRoleSelect } from "./roles.js";
@@ -30,6 +30,7 @@ export async function handleInteraction(interaction: Interaction) {
     if (interaction.customId === "ticket:kind") return handleTicketComponent(interaction);
     if (interaction.customId.startsWith("roles:select:")) return handleRoleSelect(interaction);
     if (interaction.customId.startsWith("roleperm:")) return handleRolePermissionComponent(interaction);
+    if (interaction.customId.startsWith("music:")) return handleMusicSelect(interaction);
   }
 
   if (interaction.isChannelSelectMenu() || interaction.isRoleSelectMenu()) {

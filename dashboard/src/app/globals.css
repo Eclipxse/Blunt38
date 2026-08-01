@@ -6243,6 +6243,7 @@ body::after {
 }
 
 .minimal-field select,
+.minimal-field input,
 .minimal-field textarea {
   width: 100%;
   border: 1px solid rgba(238, 228, 215, 0.14);
@@ -6259,6 +6260,11 @@ body::after {
   padding: 0 12px;
 }
 
+.minimal-field input {
+  min-height: 43px;
+  padding: 0 12px;
+}
+
 .minimal-field textarea {
   min-height: 128px;
   resize: vertical;
@@ -6267,6 +6273,7 @@ body::after {
 }
 
 .minimal-field select:focus,
+.minimal-field input:focus,
 .minimal-field textarea:focus {
   border-color: #948ce8;
   background: #18131b;

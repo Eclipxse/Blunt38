@@ -33,6 +33,9 @@ export type GuildConfig = {
   aiResponderChannelId?: string;
   aiResponderPrompt?: string;
   aiResponderPersona?: "default" | "genz-girl" | "professional" | "sassy";
+  musicDjRoleId?: string;
+  musicDefaultVolume?: number;
+  musicAutoplayEnabled?: boolean;
   accentColor?: number;
 };
 
