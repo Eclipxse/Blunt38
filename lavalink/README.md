@@ -83,9 +83,14 @@ LAVALINK_PASSWORD=youshallnotpass
 LAVALINK_SECURE=false
 MUSIC_SEARCH_SOURCE=ytsearch
 MUSIC_DEFAULT_VOLUME=80
+MUSIC_YTDLP_ENABLED=true
+MUSIC_YTDLP_PATH=/usr/local/bin/yt-dlp
+MUSIC_YTDLP_TIMEOUT_MS=25000
 ```
 
 The `LAVALINK_PASSWORD` must match `lavalink.server.password` in `application.yml`.
+
+When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp resolves only the requested YouTube video or the first result for the requested song name; Lavalink continues to handle queueing, filters, seeking, and Discord audio.
 
 ## Spotify Links
 
