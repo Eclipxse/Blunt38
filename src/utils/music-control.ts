@@ -50,3 +50,71 @@ export function classifyMusicPlaybackEnd(eventType: string, reason?: string): Mu
 
   return "finished";
 }
+
+const ignoredTrackWords = new Set([
+  "official",
+  "video",
+  "music",
+  "audio",
+  "lyrics",
+  "lyric",
+  "visualizer",
+  "remastered",
+  "remaster",
+  "youtube",
+  "topic",
+  "hd",
+  "4k"
+]);
+
+const alternateVersionWords = new Set([
+  "cover",
+  "remix",
+  "karaoke",
+  "instrumental",
+  "slowed",
+  "reverb",
+  "sped",
+  "nightcore",
+  "live"
+]);
+
+export function isConfidentMusicMatch(
+  originalTitle: string,
+  originalAuthor: string | undefined,
+  candidateTitle: string,
+  candidateAuthor: string | undefined
+) {
+  const titleTokens = trackIdentityTokens(originalTitle);
+  if (!titleTokens.length) return false;
+
+  const authorTokens = trackIdentityTokens(originalAuthor ?? "");
+  const candidateTitleTokens = trackIdentityTokens(candidateTitle);
+  const candidateTokens = new Set([
+    ...candidateTitleTokens,
+    ...trackIdentityTokens(candidateAuthor ?? "")
+  ]);
+
+  const titleCoverage = tokenCoverage(titleTokens, candidateTokens);
+  const authorCoverage = authorTokens.length ? tokenCoverage(authorTokens, candidateTokens) : 1;
+  const changedVersion = candidateTitleTokens.some((token) => {
+    return alternateVersionWords.has(token) && !titleTokens.includes(token);
+  });
+
+  return titleCoverage >= 0.8 && authorCoverage >= 0.5 && !changedVersion;
+}
+
+function trackIdentityTokens(value: string) {
+  return value
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter((token) => token && !ignoredTrackWords.has(token));
+}
+
+function tokenCoverage(required: string[], candidate: Set<string>) {
+  if (!required.length) return 1;
+  return required.filter((token) => candidate.has(token)).length / required.length;
+}
