@@ -52,9 +52,11 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     clients:
-      # MUSIC handles ytmsearch metadata. TV uses the OAuth session for playback.
+      # MUSIC handles ytmsearch metadata. TV uses OAuth for playback, while
+      # TVHTML5_SIMPLY provides a non-OAuth fallback with progressive formats.
       - MUSIC
       - TV
+      - TVHTML5_SIMPLY
       - ANDROID_VR
       - WEB
       - WEBEMBEDDED
