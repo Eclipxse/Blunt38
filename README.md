@@ -49,7 +49,7 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 | --- | --- |
 | Control surface | `/setup` opens a button, menu, channel-select, role-select, and modal based configuration panel |
 | AI brain | One-off `/ai ask`, one dedicated auto-reply channel, custom prompts, personas, Groq, OpenRouter, and OpenAI-compatible routing |
-| Music deck | Search or link playback, queue, pause, resume, skip, stop, shuffle, loop, volume, removal, and now-playing controls |
+| Music deck | Exact-result search, link playback, paginated queue, previous/replay/seek, autoplay, EQ filters, DJ access, and complete button controls |
 | Draw Party | Real-time browser drawing rooms with word choices, brush, fill, eraser, colors, sounds, guesses, rounds, and scoring |
 | Tickets | Modal intake, category routing, staff claims, locks, transcripts, and close confirmation |
 | Moderation | Warnings, timeouts, kicks, bans, stored cases, history, and voice disconnect controls |
@@ -77,8 +77,9 @@ The heavier command groups have subcommands. The important ones:
 ```text
 /ai ask | setup | disable | prompt | persona | status
 /goodbye set | test | clear
-/music play | pause | resume | skip | stop | queue | nowplaying
-       volume | loop | shuffle | remove
+/music play | search | pause | resume | previous | replay | skip | stop
+       queue | nowplaying | volume | loop | shuffle | clear | seek
+       autoplay | filters | move | remove | settings
 /role create | permissions | preset | give | remove | autorole | clear-autorole
 /birthday set | remove | list | channel
 /server preview | build | cleanup
@@ -260,6 +261,8 @@ java -Xms256M -Xmx1G -jar Lavalink.jar
 ```
 
 YouTube and YouTube Music search use the Lavalink YouTube plugin. Spotify, Apple Music, and Deezer links need the matching plugins and credentials. A link existing does not magically make the source enabled. tragic but real.
+
+The upgraded deck includes an exact-result picker, previous and replay controls, timestamp seeking, queue pagination and reordering, session autoplay, and native Lavalink filters for balanced EQ, bass boost, nightcore, vaporwave, and karaoke. `/music settings` or the dashboard Music page configures the guild DJ role, starting volume, and autoplay default. Without a DJ role, everyone in the active voice channel keeps normal control access.
 
 More node setup lives in [`lavalink/README.md`](lavalink/README.md).
 

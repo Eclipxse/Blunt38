@@ -15,7 +15,7 @@ export async function handleHelpButton(interaction: ButtonInteraction) {
       embeds: [
         panelEmbed("Core Commands", "CONTROL", "Daily utility and configuration commands.", palette.electric)
           .addFields(
-            { name: "Commands", value: "`/help`\n`/ai ask`\n`/setup`\n`/serverinfo`\n`/userinfo`\n`/embed create`", inline: false }
+            { name: "Commands", value: "`/help`\n`/ai ask`\n`/music play`\n`/music search`\n`/setup`\n`/serverinfo`\n`/userinfo`\n`/embed create`", inline: false }
           )
       ],
       components: [row]

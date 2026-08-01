@@ -605,17 +605,22 @@ function AutomationEditor({
 }
 
 export function MusicView({
-  config: _config,
+  config,
   channels: _channels,
-  roles: _roles,
-  updateConfig: _updateConfig
+  roles,
+  updateConfig
 }: BaseViewProps) {
   const commands = [
     ["/music play", "Search or paste a link"],
+    ["/music search", "Choose the exact result"],
     ["/music queue", "See what plays next"],
     ["/music loop", "Repeat a track or queue"],
     ["/music seek", "Jump to a timestamp"],
     ["/music filters", "Shape the current sound"],
+    ["/music autoplay", "Keep related tracks coming"],
+    ["/music previous", "Return to the last track"],
+    ["/music move", "Reorder the queue"],
+    ["/music clear", "Clear upcoming tracks"],
     ["/music skip", "Move to the next track"]
   ];
 
@@ -627,8 +632,42 @@ export function MusicView({
         description="Playback stays inside Discord. This is the command map."
       />
 
+      <EditorSurface
+        title="Player defaults"
+        description="These settings apply whenever a fresh voice player starts."
+        action={
+          <Toggle
+            checked={config.musicAutoplayEnabled}
+            label="Toggle autoplay default"
+            onChange={(value) => updateConfig("musicAutoplayEnabled", value)}
+          />
+        }
+      >
+        <SelectField
+          label="DJ control role"
+          value={config.musicDjRoleId}
+          options={roles}
+          placeholder="Everyone in the voice channel"
+          onChange={(value) => updateConfig("musicDjRoleId", value)}
+        />
+        <label className="minimal-field">
+          <span>Default volume</span>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={config.musicDefaultVolume}
+            onChange={(event) => {
+              const value = Number(event.target.value);
+              updateConfig("musicDefaultVolume", Math.max(1, Math.min(100, value || 1)));
+            }}
+          />
+          <small>Members can request tracks. The DJ role gates playback and queue controls.</small>
+        </label>
+      </EditorSurface>
+
       <section className="minimal-section music-settings">
-        <SectionHeading title="Available in Discord" meta="6 commands" />
+        <SectionHeading title="Available in Discord" meta={`${commands.length} essentials`} />
         <div className="music-command-list">
           {commands.map(([command, description]) => (
             <div key={command}>
