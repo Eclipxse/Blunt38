@@ -7,6 +7,10 @@ type DashboardEnv = {
   databaseUrl: string;
   supabaseUrl: string | null;
   supabaseServiceRoleKey: string | null;
+  lavalinkHost: string;
+  lavalinkPort: number;
+  lavalinkPassword: string;
+  lavalinkSecure: boolean;
 };
 
 function requireEnv(name: string) {
@@ -30,6 +34,8 @@ function requireEnv(name: string) {
 }
 
 export function getEnv(): DashboardEnv {
+  const lavalinkPort = Number.parseInt(process.env.LAVALINK_PORT ?? "2333", 10);
+
   return {
     discordClientId: requireEnv("DISCORD_CLIENT_ID"),
     discordClientSecret: requireEnv("DISCORD_CLIENT_SECRET"),
@@ -38,6 +44,10 @@ export function getEnv(): DashboardEnv {
     sessionSecret: requireEnv("DASHBOARD_SESSION_SECRET"),
     databaseUrl: requireEnv("DATABASE_URL"),
     supabaseUrl: process.env.SUPABASE_URL?.trim().replace(/\/$/, "") || null,
-    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || null,
+    lavalinkHost: process.env.LAVALINK_HOST?.trim() || "127.0.0.1",
+    lavalinkPort: Number.isFinite(lavalinkPort) ? lavalinkPort : 2333,
+    lavalinkPassword: process.env.LAVALINK_PASSWORD?.trim() || "youshallnotpass",
+    lavalinkSecure: process.env.LAVALINK_SECURE === "true"
   };
 }

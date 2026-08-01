@@ -106,6 +106,12 @@ export async function fetchBotGuilds() {
   });
 }
 
+export async function fetchBotUser() {
+  return discordFetch<DiscordUser>("/users/@me", {
+    headers: { Authorization: `Bot ${getEnv().discordToken}` }
+  });
+}
+
 export async function fetchGuildChannels(guildId: string) {
   return discordFetch<DiscordChannel[]>(`/guilds/${guildId}/channels`, {
     headers: { Authorization: `Bot ${getEnv().discordToken}` }

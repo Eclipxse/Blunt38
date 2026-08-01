@@ -284,7 +284,7 @@ curl http://127.0.0.1:8787/draw/health
 
 ## // control room
 
-The dashboard lives in `dashboard/` and provides Discord login, admin-only guild access, real channel and role selectors, configuration previews, and database-backed saves.
+The dashboard lives in `dashboard/` and provides Discord login, admin-only guild access, real channel and role selectors, configuration previews, and database-backed saves. `Ctrl+K` opens the command palette, the home screen tracks setup completion, and live diagnostics probe Discord, Supabase, and Lavalink independently with actual response latency.
 
 ```env
 DISCORD_CLIENT_ID=your_application_id
@@ -295,6 +295,10 @@ DASHBOARD_SESSION_SECRET=replace_with_a_long_random_secret
 DATABASE_URL=your_supabase_pooler_url
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
+LAVALINK_HOST=127.0.0.1
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
 ```
 
 OAuth callback:
@@ -308,7 +312,7 @@ Local dashboard:
 ```bash
 cd dashboard
 npm install
-copy .env.example .env
+copy .env.example .env.local
 npm run dev
 ```
 
