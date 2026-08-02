@@ -10,7 +10,8 @@ import {
 } from "./music-control.js";
 import {
   parseYtDlpPayload,
-  shouldResolveYoutubeInput
+  shouldResolveYoutubeInput,
+  youtubeAudioCacheExpiry
 } from "../services/youtube-resolver.js";
 
 test("parseSeekPosition accepts seconds and timestamps", () => {
@@ -102,4 +103,20 @@ test("yt-dlp payload parser rejects responses without audio", () => {
     () => parseYtDlpPayload('{"id":"missing"}', "missing"),
     /playable audio URL/
   );
+});
+
+test("yt-dlp cache never outlives the configured TTL", () => {
+  const now = 1_800_000_000_000;
+  const streamUrl = `https://example.googlevideo.com/audio?expire=${Math.floor((now + 6 * 60 * 60 * 1000) / 1000)}`;
+
+  assert.equal(youtubeAudioCacheExpiry(streamUrl, now, 2 * 60 * 60 * 1000), now + 2 * 60 * 60 * 1000);
+});
+
+test("yt-dlp cache expires before the signed stream URL", () => {
+  const now = 1_800_000_000_000;
+  const signedExpiry = now + 60 * 60 * 1000;
+  const streamUrl = `https://example.googlevideo.com/audio?expire=${Math.floor(signedExpiry / 1000)}`;
+
+  assert.equal(youtubeAudioCacheExpiry(streamUrl, now, 2 * 60 * 60 * 1000), signedExpiry - 5 * 60 * 1000);
+  assert.equal(youtubeAudioCacheExpiry("https://audio.example/stream", now, 30_000), now + 30_000);
 });
