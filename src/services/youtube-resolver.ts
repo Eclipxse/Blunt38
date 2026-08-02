@@ -1,6 +1,16 @@
 import { spawn } from "node:child_process";
 
 const maxOutputBytes = 12 * 1024 * 1024;
+const maxCacheEntries = 1_000;
+const streamExpirySafetyMs = 5 * 60 * 1000;
+
+type CachedYoutubeAudio = {
+  value: ResolvedYoutubeAudio;
+  expiresAt: number;
+};
+
+const audioCache = new Map<string, CachedYoutubeAudio>();
+const pendingResolutions = new Map<string, Promise<ResolvedYoutubeAudio>>();
 
 type YtDlpPayload = {
   id?: unknown;
@@ -71,12 +81,58 @@ export function parseYtDlpPayload(output: string, fallbackQuery: string): Resolv
   };
 }
 
+export function getCachedYoutubeAudio(query: string, now = Date.now()) {
+  const key = youtubeCacheKey(query);
+  const cached = audioCache.get(key);
+  if (!cached) return null;
+
+  if (cached.expiresAt <= now) {
+    audioCache.delete(key);
+    return null;
+  }
+
+  // Refresh insertion order so frequently used tracks survive bounded pruning.
+  audioCache.delete(key);
+  audioCache.set(key, cached);
+  return cached.value;
+}
+
+export function youtubeAudioCacheExpiry(
+  streamUrl: string,
+  now: number,
+  fallbackTtlMs: number
+) {
+  const fallbackExpiry = now + Math.max(0, fallbackTtlMs);
+
+  try {
+    const expireSeconds = Number.parseInt(new URL(streamUrl).searchParams.get("expire") ?? "", 10);
+    if (!Number.isFinite(expireSeconds)) return fallbackExpiry;
+    return Math.max(now, Math.min(fallbackExpiry, expireSeconds * 1000 - streamExpirySafetyMs));
+  } catch {
+    return fallbackExpiry;
+  }
+}
+
 export async function resolveYoutubeAudio(input: {
   query: string;
+  target?: string;
   executable: string;
   timeoutMs: number;
+  cacheTtlMs: number;
 }) {
-  const target = isUrl(input.query) ? input.query : `ytsearch1:${input.query}`;
+  const target = input.target ?? (isUrl(input.query) ? input.query : `ytsearch1:${input.query}`);
+  const lookupKeys = uniqueCacheKeys(input.query, target);
+
+  for (const key of lookupKeys) {
+    const cached = getCachedYoutubeAudioByKey(key);
+    if (cached) return cached;
+  }
+
+  for (const key of lookupKeys) {
+    const pending = pendingResolutions.get(key);
+    if (pending) return pending;
+  }
+
   const args = [
     "--ignore-config",
     "--force-ipv4",
@@ -93,8 +149,83 @@ export async function resolveYoutubeAudio(input: {
     target
   ];
 
-  const output = await runYtDlp(input.executable, args, input.timeoutMs);
-  return parseYtDlpPayload(output, input.query);
+  const resolution = Promise.resolve().then(async () => {
+    const output = await runYtDlp(input.executable, args, input.timeoutMs);
+    const resolved = parseYtDlpPayload(output, input.query);
+    const expiresAt = youtubeAudioCacheExpiry(resolved.streamUrl, Date.now(), input.cacheTtlMs);
+    const cacheKeys = uniqueCacheKeys(
+      input.query,
+      target,
+      resolved.id,
+      resolved.webpageUrl
+    );
+
+    if (expiresAt > Date.now()) {
+      for (const key of cacheKeys) audioCache.set(key, { value: resolved, expiresAt });
+      pruneCache();
+    }
+
+    return resolved;
+  });
+
+  for (const key of lookupKeys) pendingResolutions.set(key, resolution);
+
+  try {
+    return await resolution;
+  } finally {
+    for (const key of lookupKeys) {
+      if (pendingResolutions.get(key) === resolution) pendingResolutions.delete(key);
+    }
+  }
+}
+
+function getCachedYoutubeAudioByKey(key: string, now = Date.now()) {
+  const cached = audioCache.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= now) {
+    audioCache.delete(key);
+    return null;
+  }
+
+  audioCache.delete(key);
+  audioCache.set(key, cached);
+  return cached.value;
+}
+
+function uniqueCacheKeys(...values: string[]) {
+  return [...new Set(values.map(youtubeCacheKey))];
+}
+
+function youtubeCacheKey(value: string) {
+  const trimmed = value.trim();
+  const videoId = youtubeVideoId(trimmed);
+  if (videoId) return `video:${videoId}`;
+  return `query:${trimmed.replace(/\s+/g, " ").toLowerCase()}`;
+}
+
+function youtubeVideoId(value: string) {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+    if (host === "youtu.be") return parsed.pathname.split("/").filter(Boolean)[0];
+    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+      return parsed.searchParams.get("v")
+        ?? (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/live/")
+          ? parsed.pathname.split("/").filter(Boolean)[1]
+          : null);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function pruneCache() {
+  while (audioCache.size > maxCacheEntries) {
+    const oldest = audioCache.keys().next().value;
+    if (typeof oldest !== "string") return;
+    audioCache.delete(oldest);
+  }
 }
 
 function runYtDlp(executable: string, args: string[], timeoutMs: number) {

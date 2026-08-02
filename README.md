@@ -255,6 +255,7 @@ MUSIC_DEFAULT_VOLUME=80
 MUSIC_YTDLP_ENABLED=true
 MUSIC_YTDLP_PATH=/usr/local/bin/yt-dlp
 MUSIC_YTDLP_TIMEOUT_MS=25000
+MUSIC_YTDLP_CACHE_TTL_MS=7200000
 ```
 
 Start Lavalink before the bot:
@@ -263,7 +264,7 @@ Start Lavalink before the bot:
 java -Xms256M -Xmx1G -jar Lavalink.jar
 ```
 
-When `MUSIC_YTDLP_ENABLED=true`, exact YouTube links and `/music play` song-name searches are resolved by yt-dlp first; Lavalink receives the resulting direct audio stream and still owns the Discord voice connection. This avoids substituting an unrelated SoundCloud upload when YouTube's Lavalink clients are blocked. Spotify, Apple Music, and Deezer links still need their matching plugins and credentials.
+When `MUSIC_YTDLP_ENABLED=true`, exact YouTube links and `/music play` song-name searches are resolved by yt-dlp first; Lavalink receives the resulting direct audio stream and still owns the Discord voice connection. Song names use Lavalink's quick metadata search before yt-dlp resolves the exact video, while signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` (and never past their provider expiry). Repeated tracks are therefore nearly immediate. This avoids substituting an unrelated SoundCloud upload when YouTube's Lavalink clients are blocked. Spotify, Apple Music, and Deezer links still need their matching plugins and credentials.
 
 The upgraded deck includes an exact-result picker, previous and replay controls, timestamp seeking, queue pagination and reordering, session autoplay, and native Lavalink filters for balanced EQ, bass boost, nightcore, vaporwave, and karaoke. `/music settings` or the dashboard Music page configures the guild DJ role, starting volume, and autoplay default. Without a DJ role, everyone in the active voice channel keeps normal control access.
 

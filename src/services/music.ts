@@ -32,6 +32,7 @@ import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
 import {
+  getCachedYoutubeAudio,
   resolveYoutubeAudio,
   shouldResolveYoutubeInput,
   type ResolvedYoutubeAudio
@@ -880,14 +881,41 @@ function musicTrackKey(track: MusicTrack) {
 }
 
 async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User) {
-  const resolved = await resolveYoutubeAudio({
+  const startedAt = performance.now();
+  const cached = getCachedYoutubeAudio(query);
+  let target: string | undefined;
+  let lookupMs = 0;
+
+  if (!cached && !isUrl(query)) {
+    const lookupStartedAt = performance.now();
+    try {
+      const lookup = await player.search(
+        { query, source: "ytsearch" as SearchPlatform },
+        requester
+      );
+      target = lookup.tracks[0]?.info.uri ?? undefined;
+    } catch (error) {
+      console.warn(`[music:ytdlp-lookup-fallback] query=${JSON.stringify(query)}`, error);
+    }
+    lookupMs = performance.now() - lookupStartedAt;
+  }
+
+  const resolveStartedAt = performance.now();
+  const resolved = cached ?? await resolveYoutubeAudio({
     query,
+    target,
     executable: env.musicYtDlpPath,
-    timeoutMs: env.musicYtDlpTimeoutMs
+    timeoutMs: env.musicYtDlpTimeoutMs,
+    cacheTtlMs: env.musicYtDlpCacheTtlMs
   });
+  const resolveMs = performance.now() - resolveStartedAt;
   const result = await player.search(resolved.streamUrl, requester);
   const track = result.tracks[0];
   if (!track) throw new Error("yt-dlp resolved the video, but Lavalink could not load its audio stream.");
+
+  console.info(
+    `[music:ytdlp] cache=${cached ? "hit" : "miss"} lookup=${Math.round(lookupMs)}ms resolve=${Math.round(resolveMs)}ms total=${Math.round(performance.now() - startedAt)}ms video=${resolved.id}`
+  );
 
   track.userData = {
     ...track.userData,
