@@ -9,6 +9,7 @@ import {
   StringSelectMenuBuilder,
   type ChatInputCommandInteraction,
   type GuildMember,
+  type Message,
   type StringSelectMenuInteraction,
   type User
 } from "discord.js";
@@ -37,6 +38,14 @@ import {
   shouldResolveYoutubeInput,
   type ResolvedYoutubeAudio
 } from "./youtube-resolver.js";
+import {
+  mapWithConcurrency,
+  parseSpotifyInput,
+  resolveSpotifyInput,
+  spotifySearchQueries,
+  type SpotifyResolvedInput,
+  type SpotifyTrackMetadata
+} from "./spotify-resolver.js";
 
 let manager: LavalinkManager | null = null;
 
@@ -47,6 +56,23 @@ type MusicPanelTarget = {
 
 type MusicInteraction = ChatInputCommandInteraction | StringSelectMenuInteraction;
 type MusicTrack = Track | UnresolvedTrack;
+type MusicSearchResult = Awaited<ReturnType<Player["search"]>>;
+type MusicRequestContext = Pick<ChatInputCommandInteraction, "guild" | "guildId" | "user" | "channelId">;
+
+type SpotifyPlaySummary = {
+  kind: SpotifyResolvedInput["kind"];
+  name: string;
+  total: number;
+  resolved: number;
+  skipped: number;
+};
+
+type MusicPlayResult = {
+  result: MusicSearchResult;
+  added: MusicTrack[];
+  spotifySummary?: SpotifyPlaySummary;
+  sourceLabel: string;
+};
 
 type MusicSearchSession = {
   guildId: string;
@@ -86,24 +112,14 @@ const maxPlaybackRecoveryAttempts = 2;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink, wait until /v4/info responds, then restart the bot so it can attach to a usable node.";
-const spotifyUnavailableMessage =
-  "Spotify links are not enabled on Lavalink yet. Use a song name or YouTube link for now, or enable the LavaSrc Spotify plugin with Spotify client credentials.";
 
 function isMissingLavalinkNodeError(error: unknown) {
   return error instanceof Error && /no lavalink node/i.test(error.message);
 }
 
-function isSpotifySourceError(error: unknown) {
-  return error instanceof Error && /spotify/i.test(error.message) && /enabled|source|lavasrc/i.test(error.message);
-}
-
 function explainLavalinkError(error: unknown): never {
   if (isMissingLavalinkNodeError(error)) {
     throw new Error(lavalinkUnavailableMessage);
-  }
-
-  if (isSpotifySourceError(error)) {
-    throw new Error(spotifyUnavailableMessage);
   }
 
   throw error;
@@ -320,8 +336,8 @@ export function musicIsReady() {
   return Boolean(manager?.useable);
 }
 
-export async function createOrGetMusicPlayer(interaction: MusicInteraction) {
-  if (!interaction.guild || !interaction.guildId) {
+export async function createOrGetMusicPlayer(context: MusicRequestContext) {
+  if (!context.guild || !context.guildId) {
     throw new Error("Music commands only work in servers.");
   }
 
@@ -329,31 +345,31 @@ export async function createOrGetMusicPlayer(interaction: MusicInteraction) {
     throw new Error("Lavalink is offline. Start Lavalink on the VPS, then restart or wait for the bot to reconnect.");
   }
 
-  const member = interaction.guild.members.cache.get(interaction.user.id)
-    ?? await interaction.guild.members.fetch(interaction.user.id);
+  const member = context.guild.members.cache.get(context.user.id)
+    ?? await context.guild.members.fetch(context.user.id);
   const voiceChannelId = member.voice.channelId;
   if (!voiceChannelId) {
     throw new Error("Join a voice channel first.");
   }
 
-  const me = interaction.guild.members.me ?? await interaction.guild.members.fetchMe().catch(() => null);
+  const me = context.guild.members.me ?? await context.guild.members.fetchMe().catch(() => null);
   if (me?.voice.channelId && me.voice.channelId !== voiceChannelId) {
     throw new Error("I am already playing in another voice channel.");
   }
 
-  const existingPlayer = manager.getPlayer(interaction.guildId);
+  const existingPlayer = manager.getPlayer(context.guildId);
   const config = existingPlayer
     ? null
-    : await getGuildConfig(interaction.guildId).catch((error) => {
-        console.error(`[music:config-error] guild=${interaction.guildId}`, error);
+    : await getGuildConfig(context.guildId).catch((error) => {
+        console.error(`[music:config-error] guild=${context.guildId}`, error);
         return null;
       });
   const defaultVolume = Math.max(1, Math.min(100, config?.musicDefaultVolume ?? env.musicDefaultVolume));
 
   const player = manager.createPlayer({
-    guildId: interaction.guildId,
+    guildId: context.guildId,
     voiceChannelId,
-    textChannelId: interaction.channelId,
+    textChannelId: context.channelId,
     selfDeaf: true,
     selfMute: false,
     volume: defaultVolume
@@ -372,8 +388,42 @@ export async function createOrGetMusicPlayer(interaction: MusicInteraction) {
 }
 
 export async function playQuery(interaction: ChatInputCommandInteraction, query: string) {
+  return playInput(interaction, query, async (player, first) => {
+    const loadingMessage = await interaction.editReply({
+      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
+      components: musicControlRows(player)
+    });
+
+    return { channelId: loadingMessage.channelId, messageId: loadingMessage.id };
+  });
+}
+
+export async function playMessageQuery(message: Pick<Message<true>, "guild" | "author" | "channelId" | "reply">, query: string) {
+  const context: MusicRequestContext = {
+    guild: message.guild,
+    guildId: message.guild?.id ?? null,
+    user: message.author,
+    channelId: message.channelId
+  };
+
+  return playInput(context, query, async (player, first) => {
+    const loadingMessage = await message.reply({
+      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
+      components: musicControlRows(player)
+    });
+
+    return { channelId: loadingMessage.channelId, messageId: loadingMessage.id };
+  });
+}
+
+async function playInput(
+  context: MusicRequestContext,
+  query: string,
+  createLoadingPanel: (player: Player, first: MusicTrack) => Promise<MusicPanelTarget>
+) {
   const startedAt = performance.now();
-  const { player, shouldConnect } = await createOrGetMusicPlayer(interaction);
+  const { player, shouldConnect } = await createOrGetMusicPlayer(context);
+  const spotifyInput = parseSpotifyInput(query);
   const useYtDlp = env.musicYtDlpEnabled && shouldResolveYoutubeInput(query);
   const searchQuery = isUrl(query)
     ? query
@@ -383,16 +433,28 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   let searchMs = 0;
   let connectMs = 0;
 
-  const searchPromise = (useYtDlp
-    ? searchYoutubeWithYtDlp(player, query, interaction.user)
-    : player.search(searchQuery, interaction.user))
+  const searchPromise = (spotifyInput
+    ? resolveSpotifyPlayback(player, spotifyInput, context.user)
+    : (useYtDlp
+      ? searchYoutubeWithYtDlp(player, query, context.user).then((result) => ({
+          result,
+          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+          sourceLabel: "yt-dlp",
+          spotifySummary: undefined
+        }))
+      : player.search(searchQuery, context.user).then((result) => ({
+          result,
+          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+          sourceLabel: isUrl(query) ? "url" : env.musicSearchSource,
+          spotifySummary: undefined
+        }))))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
       return result;
     })
     .catch((error: unknown) => {
       console.error(
-        `[music:search-error] guild=${interaction.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
+        `[music:search-error] guild=${context.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
         error
       );
       explainLavalinkError(error);
@@ -405,35 +467,28 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
       })
       .catch((error: unknown) => {
         console.error(
-          `[music:connect-error] guild=${interaction.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
+          `[music:connect-error] guild=${context.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
           error
         );
         explainLavalinkError(error);
       })
     : Promise.resolve();
 
-  const [result] = await Promise.all([searchPromise, connectPromise]);
+  const [resolved] = await Promise.all([searchPromise, connectPromise]);
 
-  if (!result.tracks.length) {
+  if (!resolved.added.length) {
     throw new Error("No tracks found.");
   }
 
-  const tracks = result.loadType === "playlist" ? result.tracks : [result.tracks[0]!];
+  const tracks = resolved.added;
   player.queue.add(tracks);
 
   const startsPlayback = !player.playing && !player.paused;
 
   if (startsPlayback) {
     const first = tracks[0];
-    const loadingMessage = await interaction.editReply({
-      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
-      components: musicControlRows(player)
-    });
-
-    player.setData("musicPanelTarget", {
-      channelId: loadingMessage.channelId,
-      messageId: loadingMessage.id
-    });
+    if (!first) throw new Error("No playable tracks were resolved.");
+    player.setData("musicPanelTarget", await createLoadingPanel(player, first));
     player.setData("musicRequestStartedAt", startedAt);
     await player.play().catch((error: unknown) => {
       explainLavalinkError(error);
@@ -441,11 +496,140 @@ export async function playQuery(interaction: ChatInputCommandInteraction, query:
   }
 
   console.info(
-    `[music:play] guild=${interaction.guildId} node=${player.node.id} source=${useYtDlp ? "yt-dlp" : isUrl(query) ? "url" : env.musicSearchSource} `
+    `[music:play] guild=${context.guildId} node=${player.node.id} source=${resolved.sourceLabel} `
     + `connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
   );
 
-  return { player, result, added: tracks, startsPlayback };
+  return { player, result: resolved.result, added: tracks, startsPlayback, spotifySummary: resolved.spotifySummary };
+}
+
+async function resolveSpotifyPlayback(player: Player, input: NonNullable<ReturnType<typeof parseSpotifyInput>>, requester: User): Promise<MusicPlayResult> {
+  if (!env.musicYtDlpEnabled) {
+    throw new Error("Spotify link playback needs MUSIC_YTDLP_ENABLED=true so blunt38 can resolve a playable YouTube source.");
+  }
+
+  const spotify = await resolveSpotifyInput(input, {
+    clientId: env.spotifyClientId,
+    clientSecret: env.spotifyClientSecret,
+    market: env.spotifyMarket,
+    cacheTtlMs: env.spotifyCacheTtlMs
+  });
+
+  const attempts = await mapWithConcurrency(
+    spotify.tracks,
+    env.musicResolveConcurrency,
+    async (track) => {
+      try {
+        return { track: await resolveSpotifyTrackPlayback(player, track, requester) };
+      } catch (error) {
+        console.warn(`[music:spotify-track-failed] track=${JSON.stringify(`${track.artist} - ${track.title}`)}`, error instanceof Error ? error.message : error);
+        return { track: null };
+      }
+    }
+  );
+
+  const successful = attempts.flatMap((attempt) => attempt.track ? [attempt.track] : []);
+  if (!successful.length) {
+    throw new Error(`Couldn't find a playable version of: ${spotify.name}`);
+  }
+
+  const resolvedCount = successful.length;
+  const skipped = spotify.skippedTracks + spotify.tracks.length - resolvedCount;
+  console.info(
+    `[music:spotify-resolved] kind=${spotify.kind} name=${JSON.stringify(spotify.name)} resolved=${resolvedCount}/${spotify.tracks.length} skipped=${skipped}`
+  );
+
+  return {
+    result: successful[0]!.result,
+    added: successful.map((entry) => entry.track),
+    spotifySummary: {
+      kind: spotify.kind,
+      name: spotify.name,
+      total: spotify.tracks.length + spotify.skippedTracks,
+      resolved: resolvedCount,
+      skipped
+    },
+    sourceLabel: "spotify-metadata"
+  };
+}
+
+async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrackMetadata, requester: User) {
+  const queries = spotifySearchQueries(spotify);
+  let lastError: unknown;
+
+  for (const query of queries) {
+    try {
+      console.info(`[music:spotify-youtube] searching=${JSON.stringify(query)}`);
+      const lookup = await player.search({ query, source: "ytsearch" as SearchPlatform }, requester);
+      const candidate = lookup.tracks.find((track) => isSpotifyCandidate(track, spotify));
+      if (!candidate?.info.uri) {
+        lastError = new Error("No confident YouTube match found.");
+        continue;
+      }
+
+      const result = await searchYoutubeWithYtDlp(player, query, requester, candidate.info.uri);
+      const track = result.tracks[0];
+      if (!track) throw new Error("yt-dlp resolved the match, but Lavalink could not load its audio stream.");
+      applySpotifyMetadata(track, spotify);
+      console.info(`[music:spotify-youtube] matched=${JSON.stringify(candidate.info.title)}`);
+      return { result, track };
+    } catch (error) {
+      lastError = error;
+      console.warn(`[music:spotify-youtube-failed] query=${JSON.stringify(query)}`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  for (const query of queries) {
+    try {
+      console.info(`[music:spotify-soundcloud] searching=${JSON.stringify(query)}`);
+      const result = await player.search({ query, source: "scsearch" as SearchPlatform }, requester);
+      const track = result.tracks.find((candidate) => isSpotifyCandidate(candidate, spotify));
+      if (!track) continue;
+
+      applySpotifyMetadata(track, spotify);
+      console.info(`[music:spotify-soundcloud] matched=${JSON.stringify(track.info.title)}`);
+      return { result, track };
+    } catch (error) {
+      lastError = error;
+      console.warn(`[music:spotify-soundcloud-failed] query=${JSON.stringify(query)}`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Couldn't find a playable version of: ${spotify.artist} - ${spotify.title}`);
+}
+
+function isSpotifyCandidate(track: MusicTrack, spotify: SpotifyTrackMetadata) {
+  if (!isConfidentMusicMatch(spotify.title, spotify.artist, track.info.title, track.info.author)) return false;
+
+  const candidateDuration = track.info.duration ?? 0;
+  if (!candidateDuration || !spotify.durationMs) return true;
+  const tolerance = Math.max(20_000, Math.round(spotify.durationMs * 0.18));
+  return Math.abs(candidateDuration - spotify.durationMs) <= tolerance;
+}
+
+function applySpotifyMetadata(track: MusicTrack, spotify: SpotifyTrackMetadata) {
+  track.userData = {
+    ...track.userData,
+    blunt38SpotifySource: "spotify",
+    blunt38SpotifyId: spotify.spotifyId,
+    blunt38SpotifyTitle: spotify.title,
+    blunt38SpotifyAuthor: spotify.artist,
+    blunt38SpotifyAlbum: spotify.album,
+    blunt38SpotifyDurationMs: spotify.durationMs,
+    blunt38SpotifyArtworkUrl: spotify.artworkUrl,
+    blunt38SpotifyUrl: spotify.spotifyUrl,
+    blunt38OriginalUrl: spotify.originalUrl
+  };
+  applySpotifyTrackInfo(track, spotify);
+}
+
+function applySpotifyTrackInfo(track: MusicTrack, spotify: SpotifyTrackMetadata) {
+  track.info.title = spotify.title;
+  track.info.author = spotify.artist;
+  if (spotify.durationMs) track.info.duration = spotify.durationMs;
+  if (spotify.artworkUrl) track.info.artworkUrl = spotify.artworkUrl;
 }
 
 export async function createMusicSearch(interaction: ChatInputCommandInteraction, query: string) {
@@ -880,13 +1064,13 @@ function musicTrackKey(track: MusicTrack) {
   return track.info.identifier || track.info.uri || "";
 }
 
-async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User) {
+async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User, exactTarget?: string) {
   const startedAt = performance.now();
   const cached = getCachedYoutubeAudio(query);
-  let target: string | undefined;
+  let target = exactTarget;
   let lookupMs = 0;
 
-  if (!cached && !isUrl(query)) {
+  if (!cached && !target && !isUrl(query)) {
     const lookupStartedAt = performance.now();
     try {
       const lookup = await player.search(
@@ -933,19 +1117,36 @@ async function searchYoutubeWithYtDlp(player: Player, query: string, requester: 
 }
 
 function applyYoutubeResolverMetadata(track: MusicTrack | null) {
-  if (!track || track.userData?.blunt38Resolver !== "yt-dlp") return;
+  if (!track) return;
   const data = track.userData;
-  const durationMs = typeof data.blunt38DurationMs === "number" ? data.blunt38DurationMs : 0;
-  applyResolvedYoutubeInfo(track, {
-    id: String(data.blunt38YoutubeId ?? track.info.identifier ?? "youtube"),
-    title: String(data.blunt38Title ?? track.info.title ?? "YouTube"),
-    author: String(data.blunt38Author ?? track.info.author ?? "YouTube"),
-    durationMs,
-    webpageUrl: String(data.blunt38WebpageUrl ?? track.info.uri ?? ""),
-    artworkUrl: typeof data.blunt38ArtworkUrl === "string" ? data.blunt38ArtworkUrl : null,
-    streamUrl: "",
-    isLive: data.blunt38IsLive === "true"
-  });
+  if (data?.blunt38Resolver === "yt-dlp") {
+    const durationMs = typeof data.blunt38DurationMs === "number" ? data.blunt38DurationMs : 0;
+    applyResolvedYoutubeInfo(track, {
+      id: String(data.blunt38YoutubeId ?? track.info.identifier ?? "youtube"),
+      title: String(data.blunt38Title ?? track.info.title ?? "YouTube"),
+      author: String(data.blunt38Author ?? track.info.author ?? "YouTube"),
+      durationMs,
+      webpageUrl: String(data.blunt38WebpageUrl ?? track.info.uri ?? ""),
+      artworkUrl: typeof data.blunt38ArtworkUrl === "string" ? data.blunt38ArtworkUrl : null,
+      streamUrl: "",
+      isLive: data.blunt38IsLive === "true"
+    });
+  }
+
+  if (data?.blunt38SpotifySource === "spotify") {
+    applySpotifyTrackInfo(track, {
+      spotifyId: String(data.blunt38SpotifyId ?? "spotify"),
+      title: String(data.blunt38SpotifyTitle ?? track.info.title ?? "Spotify"),
+      artist: String(data.blunt38SpotifyAuthor ?? track.info.author ?? "Spotify"),
+      album: String(data.blunt38SpotifyAlbum ?? "Spotify"),
+      durationMs: typeof data.blunt38SpotifyDurationMs === "number" ? data.blunt38SpotifyDurationMs : 0,
+      artworkUrl: typeof data.blunt38SpotifyArtworkUrl === "string" ? data.blunt38SpotifyArtworkUrl : null,
+      isrc: null,
+      spotifyUrl: String(data.blunt38SpotifyUrl ?? ""),
+      originalUrl: String(data.blunt38OriginalUrl ?? ""),
+      source: "spotify"
+    });
+  }
 }
 
 function applyResolvedYoutubeInfo(track: MusicTrack, resolved: ResolvedYoutubeAudio) {

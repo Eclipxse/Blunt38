@@ -174,11 +174,34 @@ export const musicCommand: Command = {
 
       try {
         const query = interaction.options.getString("query", true);
-        const { player, result, added, startsPlayback } = await playQuery(interaction, query);
-        if (startsPlayback) return;
+        const { player, result, added, startsPlayback, spotifySummary } = await playQuery(interaction, query);
+        if (startsPlayback) {
+          if (spotifySummary && spotifySummary.total > 1) {
+            const unresolved = spotifySummary.total - spotifySummary.resolved;
+            await interaction.followUp({
+              embeds: [musicEmbed(
+                "Spotify Queue Added",
+                [
+                  `**${spotifySummary.name}**`,
+                  `Added **${spotifySummary.resolved}/${spotifySummary.total}** tracks in order.`,
+                  unresolved ? `**${unresolved}** track(s) could not be resolved.` : "Every public track found a playable match."
+                ].join("\n")
+              )]
+            });
+          }
+          return;
+        }
 
         const first = added[0];
-        const description = result.loadType === "playlist"
+        const description = spotifySummary
+          ? [
+              `**${spotifySummary.name}**`,
+              `Added **${spotifySummary.resolved}/${spotifySummary.total}** tracks in order.`,
+              spotifySummary.total > spotifySummary.resolved
+                ? `**${spotifySummary.total - spotifySummary.resolved}** track(s) could not be resolved.`
+                : "Every public track found a playable match."
+            ].join("\n")
+          : result.loadType === "playlist"
           ? `Queued **${added.length}** tracks from **${result.playlist?.name ?? "playlist"}**.`
           : `Queued ${trackLabel(first)}\nDuration: \`${formatTrackDuration(first)}\``;
 
