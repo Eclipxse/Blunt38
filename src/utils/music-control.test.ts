@@ -13,6 +13,12 @@ import {
   shouldResolveYoutubeInput,
   youtubeAudioCacheExpiry
 } from "../services/youtube-resolver.js";
+import {
+  mapWithConcurrency,
+  parseSpotifyInput,
+  resetSpotifyResolverCaches,
+  resolveSpotifyInput
+} from "../services/spotify-resolver.js";
 
 test("parseSeekPosition accepts seconds and timestamps", () => {
   assert.equal(parseSeekPosition("90"), 90_000);
@@ -119,4 +125,157 @@ test("yt-dlp cache expires before the signed stream URL", () => {
 
   assert.equal(youtubeAudioCacheExpiry(streamUrl, now, 2 * 60 * 60 * 1000), signedExpiry - 5 * 60 * 1000);
   assert.equal(youtubeAudioCacheExpiry("https://audio.example/stream", now, 30_000), now + 30_000);
+});
+
+test("Spotify URL detection accepts tracks, albums, playlists, and locale URLs", () => {
+  assert.deepEqual(parseSpotifyInput("https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp?si=test"), {
+    kind: "track",
+    id: "3n3Ppam7vgaVa1iaRUc9Lp",
+    originalUrl: "https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp?si=test"
+  });
+  assert.equal(parseSpotifyInput("https://open.spotify.com/intl-de/album/4aawyAB9vmqN3uQ7FjRGTy" )?.kind, "album");
+  assert.equal(parseSpotifyInput("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M")?.kind, "playlist");
+  assert.equal(parseSpotifyInput("https://example.com/track/3n3Ppam7vgaVa1iaRUc9Lp"), null);
+  assert.equal(parseSpotifyInput("https://open.spotify.com/track/not-a-spotify-id"), null);
+});
+
+test("Spotify track metadata uses cached client credentials and metadata", async () => {
+  resetSpotifyResolverCaches();
+  let tokenRequests = 0;
+  let trackRequests = 0;
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://accounts.spotify.com/api/token") {
+      tokenRequests += 1;
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
+    }
+    if (url.startsWith("https://api.spotify.com/v1/tracks/3n3Ppam7vgaVa1iaRUc9Lp")) {
+      trackRequests += 1;
+      return new Response(JSON.stringify({
+        id: "3n3Ppam7vgaVa1iaRUc9Lp",
+        name: "Mr. Brightside",
+        artists: [{ name: "The Killers" }],
+        album: { name: "Hot Fuss", images: [{ url: "https://image.example/cover.jpg" }] },
+        duration_ms: 222_075,
+        external_ids: { isrc: "USIS70400990" },
+        external_urls: { spotify: "https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp" }
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const input = parseSpotifyInput("https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp");
+  assert.ok(input);
+
+  const options = { clientId: "client", clientSecret: "secret", cacheTtlMs: 3_600_000, fetcher };
+  const first = await resolveSpotifyInput(input, options);
+  const second = await resolveSpotifyInput(input, options);
+
+  assert.equal(first.tracks[0]?.title, "Mr. Brightside");
+  assert.equal(first.tracks[0]?.artist, "The Killers");
+  assert.equal(first.tracks[0]?.isrc, "USIS70400990");
+  assert.equal(second.tracks[0]?.album, "Hot Fuss");
+  assert.equal(tokenRequests, 1);
+  assert.equal(trackRequests, 1);
+});
+
+test("Spotify retries one rate-limited metadata request", async () => {
+  resetSpotifyResolverCaches();
+  let trackRequests = 0;
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://accounts.spotify.com/api/token") {
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
+    }
+    if (url.startsWith("https://api.spotify.com/v1/tracks/3n3Ppam7vgaVa1iaRUc9Lp")) {
+      trackRequests += 1;
+      if (trackRequests === 1) return new Response(null, { status: 429, headers: { "retry-after": "0" } });
+      return new Response(JSON.stringify({
+        id: "3n3Ppam7vgaVa1iaRUc9Lp",
+        name: "Recovered",
+        artists: [{ name: "Artist" }],
+        duration_ms: 100_000
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const input = parseSpotifyInput("https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp");
+  assert.ok(input);
+
+  const resolved = await resolveSpotifyInput(input, {
+    clientId: "client",
+    clientSecret: "secret",
+    cacheTtlMs: 3_600_000,
+    fetcher
+  });
+
+  assert.equal(resolved.tracks[0]?.title, "Recovered");
+  assert.equal(trackRequests, 2);
+});
+
+test("Spotify playlists preserve order and skip unavailable entries", async () => {
+  resetSpotifyResolverCaches();
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://accounts.spotify.com/api/token") {
+      return new Response(JSON.stringify({ access_token: "token", expires_in: 3600 }), { status: 200 });
+    }
+    if (url === "https://api.spotify.com/v1/playlists/37i9dQZF1DXcBWIGoYBM5M") {
+      return new Response(JSON.stringify({ name: "Daily Mix" }), { status: 200 });
+    }
+    if (url.includes("/v1/playlists/37i9dQZF1DXcBWIGoYBM5M/items?limit=50&offset=0")) {
+      return new Response(JSON.stringify({
+        total: 3,
+        next: "https://api.spotify.com/v1/playlists/37i9dQZF1DXcBWIGoYBM5M/items?limit=50&offset=2",
+        items: [
+          { item: { id: "3n3Ppam7vgaVa1iaRUc9Lp", name: "First", artists: [{ name: "Artist" }], duration_ms: 120_000 } },
+          { item: { id: "4uLU6hMCjMI75M1A2tKUQC", name: "Local", artists: [{ name: "Artist" }], is_local: true } }
+        ]
+      }), { status: 200 });
+    }
+    if (url.includes("/v1/playlists/37i9dQZF1DXcBWIGoYBM5M/items?limit=50&offset=2")) {
+      return new Response(JSON.stringify({
+        total: 3,
+        next: null,
+        items: [{ item: { id: "0VjIjW4GlUZAMYd2vXMi3b", name: "Second", artists: [{ name: "Artist" }], duration_ms: 180_000 } }]
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const input = parseSpotifyInput("https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M");
+  assert.ok(input);
+
+  const resolved = await resolveSpotifyInput(input, {
+    clientId: "client",
+    clientSecret: "secret",
+    cacheTtlMs: 3_600_000,
+    fetcher
+  });
+
+  assert.deepEqual(resolved.tracks.map((track) => track.title), ["First", "Second"]);
+  assert.equal(resolved.skippedTracks, 1);
+});
+
+test("Spotify playlist work respects the configured concurrency and keeps source order", async () => {
+  let active = 0;
+  let peak = 0;
+  const output = await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (value) => {
+    active += 1;
+    peak = Math.max(peak, active);
+    await new Promise((resolve) => setTimeout(resolve, value % 2 ? 8 : 2));
+    active -= 1;
+    return value * 10;
+  });
+
+  assert.equal(peak, 2);
+  assert.deepEqual(output, [10, 20, 30, 40, 50]);
+});
+
+test("Spotify reports missing credentials without attempting an API request", async () => {
+  resetSpotifyResolverCaches();
+  const input = parseSpotifyInput("https://open.spotify.com/track/3n3Ppam7vgaVa1iaRUc9Lp");
+  assert.ok(input);
+  await assert.rejects(
+    () => resolveSpotifyInput(input, { cacheTtlMs: 60_000 }),
+    /Spotify is not configured/
+  );
 });

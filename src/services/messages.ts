@@ -5,6 +5,7 @@ import { palette, panelEmbed } from "../utils/ui.js";
 import { env } from "../env.js";
 import { generateAiReply, hasAiKey } from "./ai.js";
 import { buildVisualAttachment } from "./visual-message.js";
+import { playMessageQuery } from "./music.js";
 
 const xpCooldowns = new Map<string, number>();
 const contentIntentWarnings = new Set<string>();
@@ -119,6 +120,22 @@ async function handleAiResponder(message: Message<true>) {
 
 export async function handleMessageCreate(message: Message) {
   if (!message.guild || message.author.bot) return;
+
+  const legacyPlay = env.enableMessageContentIntent
+    ? message.content.match(/^!play\s+(.+)/i)
+    : null;
+  if (legacyPlay?.[1]) {
+    try {
+      await playMessageQuery(message as Message<true>, legacyPlay[1].trim());
+    } catch (error) {
+      await message.reply({
+        content: error instanceof Error ? error.message : "Could not play that track.",
+        allowedMentions: { repliedUser: false }
+      }).catch(() => null);
+    }
+    return;
+  }
+
   await handleLeveling(message as Message<true>);
   await handleAiResponder(message as Message<true>);
 }

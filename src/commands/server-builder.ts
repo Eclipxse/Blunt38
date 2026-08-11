@@ -786,7 +786,7 @@ async function sendMusicPanel(channel: TextChannel, template: ServerTemplate) {
       panelEmbed("Music Deck", "AUDIO CONTROL", "Use `/music play` with a song name or supported link.", template.accent).addFields(
         { name: "Core", value: "`/music play` `/music queue` `/music nowplaying`", inline: false },
         { name: "Controls", value: "`pause` `resume` `skip` `stop` `loop` `volume`", inline: false },
-        { name: "Note", value: "Spotify links need LavaSrc + Spotify credentials. Song names and YouTube work with the current Lavalink setup.", inline: false }
+        { name: "Spotify", value: "Track, playlist, and album links use Spotify metadata plus the existing yt-dlp resolver. Add Spotify credentials in the bot environment.", inline: false }
       )
     ]
   });
