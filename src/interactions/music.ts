@@ -1,6 +1,7 @@
 import { type ButtonInteraction, MessageFlags, type StringSelectMenuInteraction } from "discord.js";
 import {
   applyMusicFilter,
+  cancelSpotifyQueueWarmup,
   consumeMusicSearchSession,
   ensureMusicController,
   getMusicPlayer,
@@ -74,6 +75,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     }
 
     if (action === "stop") {
+      cancelSpotifyQueueWarmup(player);
       await player.destroy("Stopped by button.");
       await interaction.update({ content: "Stopped playback and left voice.", embeds: [], components: [] });
       return;
@@ -108,6 +110,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     }
 
     if (action === "clear") {
+      cancelSpotifyQueueWarmup(player);
       const count = player.queue.tracks.length;
       if (count) await player.queue.splice(0, count);
       await interaction.update({ embeds: [queueEmbed(player)], components: musicQueueRows(player) });
