@@ -67,10 +67,25 @@ type SpotifyPlaySummary = {
   skipped: number;
 };
 
+type SpotifyDeferredQueue = {
+  name: string;
+  total: number;
+  skipped: number;
+  tracks: SpotifyTrackMetadata[];
+  requester: User;
+};
+
+type SpotifyQueueWarmup = {
+  added: number;
+  skipped: number;
+  cancelled: boolean;
+};
+
 type MusicPlayResult = {
   result: MusicSearchResult;
   added: MusicTrack[];
   spotifySummary?: SpotifyPlaySummary;
+  spotifyDeferredQueue?: SpotifyDeferredQueue;
   sourceLabel: string;
 };
 
@@ -423,6 +438,7 @@ async function playInput(
 ) {
   const startedAt = performance.now();
   const { player, shouldConnect } = await createOrGetMusicPlayer(context);
+  cancelSpotifyQueueWarmup(player);
   const spotifyInput = parseSpotifyInput(query);
   const useYtDlp = env.musicYtDlpEnabled && shouldResolveYoutubeInput(query);
   const searchQuery = isUrl(query)
@@ -440,13 +456,15 @@ async function playInput(
           result,
           added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
           sourceLabel: "yt-dlp",
-          spotifySummary: undefined
+          spotifySummary: undefined,
+          spotifyDeferredQueue: undefined
         }))
       : player.search(searchQuery, context.user).then((result) => ({
           result,
           added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
           sourceLabel: isUrl(query) ? "url" : env.musicSearchSource,
-          spotifySummary: undefined
+          spotifySummary: undefined,
+          spotifyDeferredQueue: undefined
         }))))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
@@ -483,6 +501,10 @@ async function playInput(
   const tracks = resolved.added;
   player.queue.add(tracks);
 
+  const spotifyQueueWarmup = resolved.spotifyDeferredQueue
+    ? warmSpotifyQueue(player, resolved.spotifyDeferredQueue)
+    : undefined;
+
   const startsPlayback = !player.playing && !player.paused;
 
   if (startsPlayback) {
@@ -500,7 +522,62 @@ async function playInput(
     + `connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
   );
 
-  return { player, result: resolved.result, added: tracks, startsPlayback, spotifySummary: resolved.spotifySummary };
+  return {
+    player,
+    result: resolved.result,
+    added: tracks,
+    startsPlayback,
+    spotifySummary: resolved.spotifySummary,
+    spotifyQueueWarmup
+  };
+}
+
+export function cancelSpotifyQueueWarmup(player: Player) {
+  player.deleteData("musicSpotifyWarmupId");
+}
+
+function warmSpotifyQueue(player: Player, deferred: SpotifyDeferredQueue): Promise<SpotifyQueueWarmup> {
+  const warmupId = randomUUID();
+  const startedAt = performance.now();
+  player.setData("musicSpotifyWarmupId", warmupId);
+
+  return mapWithConcurrency(
+    deferred.tracks,
+    env.musicResolveConcurrency,
+    async (track) => {
+      try {
+        return { track: await resolveSpotifyTrackPlayback(player, track, deferred.requester) };
+      } catch (error) {
+        console.warn(
+          `[music:spotify-track-failed] track=${JSON.stringify(`${track.artist} - ${track.title}`)}`,
+          error instanceof Error ? error.message : error
+        );
+        return { track: null };
+      }
+    }
+  ).then((attempts) => {
+    const successful = attempts.flatMap((attempt) => attempt.track ? [attempt.track.track] : []);
+    const skipped = deferred.skipped + deferred.tracks.length - successful.length;
+    const current = player.getData<string>("musicSpotifyWarmupId") === warmupId
+      && manager?.getPlayer(player.guildId) === player;
+
+    if (!current) return { added: 0, skipped, cancelled: true };
+
+    if (successful.length) player.queue.add(successful);
+    player.deleteData("musicSpotifyWarmupId");
+    console.info(
+      `[music:spotify-warmup] guild=${player.guildId} name=${JSON.stringify(deferred.name)} `
+      + `added=${successful.length}/${deferred.tracks.length} skipped=${skipped} `
+      + `elapsed=${Math.round(performance.now() - startedAt)}ms`
+    );
+    return { added: successful.length, skipped, cancelled: false };
+  }).catch((error) => {
+    console.error(`[music:spotify-warmup-error] guild=${player.guildId}`, error);
+    if (player.getData<string>("musicSpotifyWarmupId") === warmupId) {
+      player.deleteData("musicSpotifyWarmupId");
+    }
+    return { added: 0, skipped: deferred.skipped + deferred.tracks.length, cancelled: false };
+  });
 }
 
 async function resolveSpotifyPlayback(player: Player, input: NonNullable<ReturnType<typeof parseSpotifyInput>>, requester: User): Promise<MusicPlayResult> {
@@ -515,40 +592,47 @@ async function resolveSpotifyPlayback(player: Player, input: NonNullable<ReturnT
     cacheTtlMs: env.spotifyCacheTtlMs
   });
 
-  const attempts = await mapWithConcurrency(
-    spotify.tracks,
-    env.musicResolveConcurrency,
-    async (track) => {
-      try {
-        return { track: await resolveSpotifyTrackPlayback(player, track, requester) };
-      } catch (error) {
-        console.warn(`[music:spotify-track-failed] track=${JSON.stringify(`${track.artist} - ${track.title}`)}`, error instanceof Error ? error.message : error);
-        return { track: null };
-      }
-    }
-  );
+  let first: Awaited<ReturnType<typeof resolveSpotifyTrackPlayback>> | null = null;
+  let firstTrackIndex = -1;
 
-  const successful = attempts.flatMap((attempt) => attempt.track ? [attempt.track] : []);
-  if (!successful.length) {
+  // Start one verified track before resolving an entire album. The rest is warmed in
+  // the background once playback is underway, which makes Spotify links feel immediate.
+  for (const [index, track] of spotify.tracks.entries()) {
+    try {
+      first = await resolveSpotifyTrackPlayback(player, track, requester);
+      firstTrackIndex = index;
+      break;
+    } catch (error) {
+      console.warn(`[music:spotify-track-failed] track=${JSON.stringify(`${track.artist} - ${track.title}`)}`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  if (!first || firstTrackIndex < 0) {
     throw new Error(`Couldn't find a playable version of: ${spotify.name}`);
   }
 
-  const resolvedCount = successful.length;
-  const skipped = spotify.skippedTracks + spotify.tracks.length - resolvedCount;
-  console.info(
-    `[music:spotify-resolved] kind=${spotify.kind} name=${JSON.stringify(spotify.name)} resolved=${resolvedCount}/${spotify.tracks.length} skipped=${skipped}`
-  );
+  const remaining = spotify.tracks.slice(firstTrackIndex + 1);
+  const skippedBeforePlayback = spotify.skippedTracks + firstTrackIndex;
 
   return {
-    result: successful[0]!.result,
-    added: successful.map((entry) => entry.track),
+    result: first.result,
+    added: [first.track],
     spotifySummary: {
       kind: spotify.kind,
       name: spotify.name,
       total: spotify.tracks.length + spotify.skippedTracks,
-      resolved: resolvedCount,
-      skipped
+      resolved: 1,
+      skipped: skippedBeforePlayback
     },
+    spotifyDeferredQueue: remaining.length
+      ? {
+          name: spotify.name,
+          total: spotify.tracks.length + spotify.skippedTracks,
+          skipped: skippedBeforePlayback,
+          tracks: remaining,
+          requester
+        }
+      : undefined,
     sourceLabel: "spotify-metadata"
   };
 }
@@ -559,19 +643,18 @@ async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrack
 
   for (const query of queries) {
     try {
-      console.info(`[music:spotify-youtube] searching=${JSON.stringify(query)}`);
-      const lookup = await player.search({ query, source: "ytsearch" as SearchPlatform }, requester);
-      const candidate = lookup.tracks.find((track) => isSpotifyCandidate(track, spotify));
-      if (!candidate?.info.uri) {
-        lastError = new Error("No confident YouTube match found.");
-        continue;
-      }
-
-      const result = await searchYoutubeWithYtDlp(player, query, requester, candidate.info.uri);
+      // yt-dlp can search and extract in one request. Previously every Spotify track
+      // waited for a second Lavalink ytsearch before this resolver even began.
+      console.info(`[music:spotify-youtube] resolving=${JSON.stringify(query)}`);
+      const result = await searchYoutubeWithYtDlp(player, query, requester);
       const track = result.tracks[0];
       if (!track) throw new Error("yt-dlp resolved the match, but Lavalink could not load its audio stream.");
+      if (!isSpotifyCandidate(track, spotify)) {
+        lastError = new Error("yt-dlp found a YouTube result that did not confidently match the Spotify track.");
+        continue;
+      }
       applySpotifyMetadata(track, spotify);
-      console.info(`[music:spotify-youtube] matched=${JSON.stringify(candidate.info.title)}`);
+      console.info(`[music:spotify-youtube] matched=${JSON.stringify(track.info.title)}`);
       return { result, track };
     } catch (error) {
       lastError = error;

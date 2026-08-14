@@ -2,6 +2,7 @@ import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.
 import type { Command } from "../types.js";
 import {
   applyMusicFilter,
+  cancelSpotifyQueueWarmup,
   createMusicSearch,
   ensureMusicController,
   formatTrackDuration,
@@ -174,19 +175,33 @@ export const musicCommand: Command = {
 
       try {
         const query = interaction.options.getString("query", true);
-        const { player, result, added, startsPlayback, spotifySummary } = await playQuery(interaction, query);
+        const { player, result, added, startsPlayback, spotifySummary, spotifyQueueWarmup } = await playQuery(interaction, query);
         if (startsPlayback) {
           if (spotifySummary && spotifySummary.total > 1) {
-            const unresolved = spotifySummary.total - spotifySummary.resolved;
+            const pending = spotifySummary.total - spotifySummary.resolved - spotifySummary.skipped;
             await interaction.followUp({
               embeds: [musicEmbed(
-                "Spotify Queue Added",
+                "Spotify Queue Warming",
                 [
                   `**${spotifySummary.name}**`,
-                  `Added **${spotifySummary.resolved}/${spotifySummary.total}** tracks in order.`,
-                  unresolved ? `**${unresolved}** track(s) could not be resolved.` : "Every public track found a playable match."
+                  "Playing the first verified match now.",
+                  `Resolving **${Math.max(0, pending)}** remaining track(s) in the background.`
                 ].join("\n")
               )]
+            });
+
+            void spotifyQueueWarmup?.then(async (warmup) => {
+              if (warmup.cancelled) return;
+              await interaction.followUp({
+                embeds: [musicEmbed(
+                  "Spotify Queue Ready",
+                  [
+                    `**${spotifySummary.name}**`,
+                    `Added **${warmup.added + spotifySummary.resolved}/${spotifySummary.total}** tracks in order.`,
+                    warmup.skipped ? `**${warmup.skipped}** track(s) could not be resolved.` : "Every public track found a playable match."
+                  ].join("\n")
+                )]
+              }).catch(() => null);
             });
           }
           return;
@@ -196,9 +211,9 @@ export const musicCommand: Command = {
         const description = spotifySummary
           ? [
               `**${spotifySummary.name}**`,
-              `Added **${spotifySummary.resolved}/${spotifySummary.total}** tracks in order.`,
+              "Queued the first verified track now.",
               spotifySummary.total > spotifySummary.resolved
-                ? `**${spotifySummary.total - spotifySummary.resolved}** track(s) could not be resolved.`
+                ? "The rest of the queue is warming in the background."
                 : "Every public track found a playable match."
             ].join("\n")
           : result.loadType === "playlist"
@@ -344,6 +359,7 @@ export const musicCommand: Command = {
       }
 
       if (subcommand === "stop") {
+        cancelSpotifyQueueWarmup(player);
         await player.destroy("Stopped by command.");
         await interaction.reply({ content: "Stopped playback and left voice.", flags: MessageFlags.Ephemeral });
         return;
@@ -370,6 +386,7 @@ export const musicCommand: Command = {
       }
 
       if (subcommand === "clear") {
+        cancelSpotifyQueueWarmup(player);
         const count = player.queue.tracks.length;
         if (count) await player.queue.splice(0, count);
         await interaction.reply({
