@@ -89,6 +89,31 @@ type SpotifyPlaylistItem = {
   track?: SpotifyTrack | null;
 };
 
+type SpotifyEmbedTrack = {
+  uri?: unknown;
+  title?: unknown;
+  subtitle?: unknown;
+  duration?: unknown;
+  isPlayable?: unknown;
+  entityType?: unknown;
+};
+
+type SpotifyEmbedPayload = {
+  props?: {
+    pageProps?: {
+      state?: {
+        data?: {
+          entity?: {
+            id?: unknown;
+            name?: unknown;
+            trackList?: SpotifyEmbedTrack[];
+          };
+        };
+      };
+    };
+  };
+};
+
 const tokenCache = new Map<string, SpotifyToken>();
 const metadataCache = new Map<string, CachedSpotifyInput>();
 const maxCacheEntries = 500;
@@ -96,7 +121,7 @@ const tokenSafetyMs = 60_000;
 const maxRateLimitWaitMs = 10_000;
 
 export class SpotifyResolverError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly status?: number) {
     super(message);
     this.name = "SpotifyResolverError";
   }
@@ -190,17 +215,101 @@ async function resolveTrack(input: SpotifyInput, options: SpotifyResolverOptions
 
 async function resolvePlaylist(input: SpotifyInput, options: SpotifyResolverOptions): Promise<SpotifyResolvedInput> {
   const playlist = await spotifyRequest<SpotifyPlaylist>(`/playlists/${input.id}`, options);
-  const items = await spotifyPagedRequest<SpotifyPlaylistItem>(`/playlists/${input.id}/items`, options);
+  const name = stringValue(playlist.name) ?? "Spotify playlist";
+  let items: SpotifyPlaylistItem[];
+  try {
+    items = await spotifyPagedRequest<SpotifyPlaylistItem>(`/playlists/${input.id}/items`, options);
+  } catch (error) {
+    if (error instanceof SpotifyResolverError && (error.status === 401 || error.status === 403)) {
+      return resolvePublicPlaylistEmbed(input, options, name);
+    }
+    throw error;
+  }
   const tracks = items
     .map((item) => toTrackMetadata(item.item ?? item.track ?? {}, input.originalUrl))
     .filter((track): track is SpotifyTrackMetadata => Boolean(track));
 
-  const name = stringValue(playlist.name) ?? "Spotify playlist";
   const skippedTracks = Math.max(0, items.length - tracks.length);
   if (!tracks.length) throw new SpotifyResolverError("That Spotify playlist has no playable public tracks.");
 
   console.info(`[music:spotify] playlist=${JSON.stringify(name)} tracks=${tracks.length} skipped=${skippedTracks}`);
   return { kind: "playlist", name, tracks, skippedTracks };
+}
+
+async function resolvePublicPlaylistEmbed(
+  input: SpotifyInput,
+  options: SpotifyResolverOptions,
+  fallbackName: string
+): Promise<SpotifyResolvedInput> {
+  const fetcher = options.fetcher ?? fetch;
+  const response = await spotifyFetch(fetcher, `https://open.spotify.com/embed/playlist/${input.id}`, {
+    headers: {
+      Accept: "text/html",
+      "Accept-Language": "en-US,en;q=0.8",
+      "User-Agent": "Mozilla/5.0 (compatible; blunt38/1.0)"
+    },
+    signal: AbortSignal.timeout(15_000)
+  });
+  if (!response.ok) {
+    throw new SpotifyResolverError(
+      "Spotify would not expose this playlist's public track list. It may be private or unavailable.",
+      response.status
+    );
+  }
+
+  const payload = parseSpotifyEmbedPayload(await response.text());
+  const entity = payload.props?.pageProps?.state?.data?.entity;
+  const embedTracks = Array.isArray(entity?.trackList) ? entity.trackList : [];
+  const tracks = embedTracks
+    .map((track) => toEmbedTrackMetadata(track, input.originalUrl))
+    .filter((track): track is SpotifyTrackMetadata => Boolean(track));
+  if (!tracks.length) {
+    throw new SpotifyResolverError(
+      "Spotify would not expose playable tracks for this playlist. It may be private or unavailable."
+    );
+  }
+
+  const name = stringValue(entity?.name) ?? fallbackName;
+  const skippedTracks = Math.max(0, embedTracks.length - tracks.length);
+  console.info(`[music:spotify-embed] playlist=${JSON.stringify(name)} tracks=${tracks.length} skipped=${skippedTracks}`);
+  return { kind: "playlist", name, tracks, skippedTracks };
+}
+
+function parseSpotifyEmbedPayload(html: string): SpotifyEmbedPayload {
+  const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (!match?.[1]) throw new SpotifyResolverError("Spotify returned an unreadable public playlist page.");
+
+  try {
+    return JSON.parse(match[1]) as SpotifyEmbedPayload;
+  } catch {
+    throw new SpotifyResolverError("Spotify returned invalid public playlist metadata.");
+  }
+}
+
+function toEmbedTrackMetadata(track: SpotifyEmbedTrack, originalUrl: string): SpotifyTrackMetadata | null {
+  if (track.entityType && track.entityType !== "track") return null;
+  if (track.isPlayable === false) return null;
+
+  const uri = stringValue(track.uri);
+  const id = uri?.match(/^spotify:track:([A-Za-z0-9]{22})$/)?.[1];
+  const title = stringValue(track.title);
+  const artist = stringValue(track.subtitle)?.replace(/\s*,\s*/g, ", ").replace(/\s+/g, " ").trim();
+  if (!id || !title || !artist) return null;
+
+  return {
+    spotifyId: id,
+    title,
+    artist,
+    album: "Spotify playlist",
+    durationMs: typeof track.duration === "number" && Number.isFinite(track.duration)
+      ? Math.max(0, Math.round(track.duration))
+      : 0,
+    isrc: null,
+    artworkUrl: null,
+    spotifyUrl: `https://open.spotify.com/track/${id}`,
+    originalUrl,
+    source: "spotify"
+  };
 }
 
 async function resolveAlbum(input: SpotifyInput, options: SpotifyResolverOptions): Promise<SpotifyResolvedInput> {
@@ -275,7 +384,8 @@ async function spotifyRequest<T>(path: string, options: SpotifyResolverOptions):
 
   if (response.status === 401) {
     const credentials = spotifyCredentials(options);
-    tokenCache.delete(spotifyTokenCacheKey(credentials.clientId, options.refreshToken));
+    const refreshToken = spotifyRequestUsesUserAuthorization(path, options) ? options.refreshToken : undefined;
+    tokenCache.delete(spotifyTokenCacheKey(credentials.clientId, refreshToken));
     response = await spotifyRequestWithToken(path, options, fetcher, true);
   }
 
@@ -286,7 +396,8 @@ async function spotifyRequest<T>(path: string, options: SpotifyResolverOptions):
 
   if (response.status === 401 && path.includes("/playlists/") && !options.refreshToken?.trim()) {
     throw new SpotifyResolverError(
-      "Spotify playlist links need one-time user authorization. Run npm run spotify:authorize, then restart the bot."
+      "Spotify playlist links need one-time user authorization. Run npm run spotify:authorize, then restart the bot.",
+      401
     );
   }
 
@@ -299,17 +410,27 @@ async function spotifyRequestWithToken(
   fetcher: typeof fetch,
   forceTokenRefresh: boolean
 ) {
-  const token = await spotifyAccessToken(options, fetcher, forceTokenRefresh);
+  const token = await spotifyAccessToken(
+    options,
+    fetcher,
+    forceTokenRefresh,
+    spotifyRequestUsesUserAuthorization(path, options)
+  );
   return spotifyFetch(fetcher, spotifyApiUrl(path, options.market), {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000)
   });
 }
 
-async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: typeof fetch, forceRefresh: boolean) {
+async function spotifyAccessToken(
+  options: SpotifyResolverOptions,
+  fetcher: typeof fetch,
+  forceRefresh: boolean,
+  useUserAuthorization: boolean
+) {
   const credentials = spotifyCredentials(options);
   const now = options.now ?? Date.now;
-  const refreshToken = options.refreshToken?.trim();
+  const refreshToken = useUserAuthorization ? options.refreshToken?.trim() : undefined;
   const cacheKey = spotifyTokenCacheKey(credentials.clientId, refreshToken);
   const cached = tokenCache.get(cacheKey);
   if (!forceRefresh && cached && cached.expiresAt > now()) return cached.value;
@@ -344,7 +465,8 @@ async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: type
   if (!response.ok) {
     if (refreshToken) {
       throw new SpotifyResolverError(
-        "Spotify user authorization expired or was revoked. Run npm run spotify:authorize again."
+        "Spotify user authorization expired or was revoked. Run npm run spotify:authorize again.",
+        401
       );
     }
     throw new SpotifyResolverError("Spotify authentication failed. Check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.");
@@ -366,8 +488,9 @@ async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: type
 
 async function parseSpotifyResponse<T>(response: Response): Promise<T> {
   if (response.status === 429) throw rateLimitError(response);
-  if (response.status === 404) throw new SpotifyResolverError("That Spotify item is unavailable, private, or deleted.");
-  if (response.status === 401) throw new SpotifyResolverError("Spotify rejected the access token. Check the configured Spotify credentials.");
+  if (response.status === 404) throw new SpotifyResolverError("That Spotify item is unavailable, private, or deleted.", 404);
+  if (response.status === 401) throw new SpotifyResolverError("Spotify rejected the access token. Check the configured Spotify credentials.", 401);
+  if (response.status === 403) throw new SpotifyResolverError("Spotify denied access to that item.", 403);
   if (response.status >= 500) throw new SpotifyResolverError("Spotify is unavailable right now. Try again shortly.");
   if (!response.ok) throw new SpotifyResolverError(`Spotify request failed (HTTP ${response.status}).`);
 
@@ -385,6 +508,12 @@ function spotifyCredentials(options: SpotifyResolverOptions) {
 
 function spotifyTokenCacheKey(clientId: string, refreshToken?: string) {
   return `${clientId}:${refreshToken?.trim() ? "user" : "app"}`;
+}
+
+function spotifyRequestUsesUserAuthorization(path: string, options: SpotifyResolverOptions) {
+  return Boolean(options.refreshToken?.trim())
+    && path.includes("/playlists/")
+    && path.includes("/items");
 }
 
 function spotifyApiUrl(path: string, market?: string) {

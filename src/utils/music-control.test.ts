@@ -288,11 +288,11 @@ test("Spotify playlist authorization uses the configured refresh token", async (
   });
 
   assert.equal(resolved.tracks[0]?.title, "First");
-  assert.match(tokenBodies[0] ?? "", /grant_type=refresh_token/);
-  assert.match(tokenBodies[0] ?? "", /refresh_token=refresh-token/);
+  assert.ok(tokenBodies.some((body) => /grant_type=refresh_token/.test(body)));
+  assert.ok(tokenBodies.some((body) => /refresh_token=refresh-token/.test(body)));
 });
 
-test("Spotify playlist errors explain when user authorization is missing", async () => {
+test("Spotify public playlists fall back to embed metadata when API access is restricted", async () => {
   resetSpotifyResolverCaches();
   const fetcher: typeof fetch = async (input) => {
     const url = String(input);
@@ -305,20 +305,48 @@ test("Spotify playlist errors explain when user authorization is missing", async
     if (url.includes("/v1/playlists/5lzszfSoySkXHw6Fatyssc/items?limit=50&offset=0")) {
       return new Response(JSON.stringify({ error: { status: 401, message: "Valid user authentication required" } }), { status: 401 });
     }
+    if (url === "https://open.spotify.com/embed/playlist/5lzszfSoySkXHw6Fatyssc") {
+      return new Response([
+        '<script id="__NEXT_DATA__" type="application/json">',
+        JSON.stringify({
+          props: {
+            pageProps: {
+              state: {
+                data: {
+                  entity: {
+                    name: "Public embed playlist",
+                    trackList: [{
+                      uri: "spotify:track:3n3Ppam7vgaVa1iaRUc9Lp",
+                      title: "Embedded track",
+                      subtitle: "Artist One,Artist Two",
+                      duration: 120_000,
+                      isPlayable: true,
+                      entityType: "track"
+                    }]
+                  }
+                }
+              }
+            }
+          }
+        }),
+        "</script>"
+      ].join(""), { status: 200, headers: { "content-type": "text/html" } });
+    }
     throw new Error(`Unexpected request: ${url}`);
   };
   const input = parseSpotifyInput("https://open.spotify.com/playlist/5lzszfSoySkXHw6Fatyssc");
   assert.ok(input);
 
-  await assert.rejects(
-    () => resolveSpotifyInput(input, {
-      clientId: "client",
-      clientSecret: "secret",
-      cacheTtlMs: 3_600_000,
-      fetcher
-    }),
-    /one-time user authorization/
-  );
+  const resolved = await resolveSpotifyInput(input, {
+    clientId: "client",
+    clientSecret: "secret",
+    cacheTtlMs: 3_600_000,
+    fetcher
+  });
+
+  assert.equal(resolved.name, "Public embed playlist");
+  assert.equal(resolved.tracks[0]?.title, "Embedded track");
+  assert.equal(resolved.tracks[0]?.artist, "Artist One, Artist Two");
 });
 
 test("Spotify playlist work respects the configured concurrency and keeps source order", async () => {
