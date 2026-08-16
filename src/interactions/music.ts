@@ -7,6 +7,8 @@ import {
   getMusicPlayer,
   isMusicFilterPreset,
   musicControlRows,
+  musicControlsEmbed,
+  musicExpandedControlRows,
   musicQueueRows,
   queueEmbed,
   queueSearchResult,
@@ -34,10 +36,23 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
   const [, action, detail] = interaction.customId.split(":");
 
+  if (action === "controls") {
+    const payload = {
+      embeds: [musicControlsEmbed(player)],
+      components: musicExpandedControlRows(player)
+    };
+    if (interaction.message.flags.has(MessageFlags.Ephemeral)) {
+      await interaction.update(payload);
+    } else {
+      await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
+    }
+    return;
+  }
+
   if (action === "queue") {
     const page = Number(detail ?? 0);
     const payload = { embeds: [queueEmbed(player, page)], components: musicQueueRows(player, page) };
-    if (interaction.message.embeds[0]?.title?.startsWith("Music Queue")) {
+    if (interaction.message.embeds[0]?.title?.startsWith("Music Queue") || interaction.message.flags.has(MessageFlags.Ephemeral)) {
       await interaction.update(payload);
     } else {
       await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
@@ -84,7 +99,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     if (action === "loop") {
       const mode = nextLoopMode(player.repeatMode);
       await player.setRepeatMode(mode);
-      await interaction.update({ components: musicControlRows(player) });
+      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
       return;
     }
 
@@ -105,7 +120,20 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       setPlayerMusicSettings(player, {
         autoplayEnabled: !player.getData<boolean>("musicAutoplayEnabled")
       });
-      await interaction.update({ components: musicControlRows(player) });
+      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
+      return;
+    }
+
+    if (action === "volume-status") {
+      await interaction.deferUpdate();
+      return;
+    }
+
+    if (action === "volume-down" || action === "volume-up") {
+      const change = action === "volume-down" ? -10 : 10;
+      const volume = Math.max(1, Math.min(100, player.volume + change));
+      await player.setVolume(volume);
+      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
       return;
     }
 
@@ -145,7 +173,10 @@ export async function handleMusicSelect(interaction: StringSelectMenuInteraction
       if (!isMusicFilterPreset(preset)) throw new Error("That sound filter is not available.");
       await interaction.deferUpdate();
       await applyMusicFilter(player, preset);
-      await interaction.editReply({ components: musicControlRows(player) });
+      await interaction.editReply({
+        embeds: [musicControlsEmbed(player)],
+        components: musicExpandedControlRows(player)
+      });
       await interaction.followUp({ content: `Sound filter set to **${preset}**.`, flags: MessageFlags.Ephemeral });
     } catch (error) {
       const content = error instanceof Error ? error.message : "Could not change the sound filter.";

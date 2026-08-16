@@ -26,8 +26,7 @@ import {
   classifyMusicPlaybackEnd,
   clampMusicPage,
   isConfidentMusicMatch,
-  musicPageCount,
-  progressBar
+  musicPageCount
 } from "../utils/music-control.js";
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
@@ -890,28 +889,54 @@ export function musicEmbed(title: string, description: string) {
     .setTimestamp();
 }
 
+function compactProgressBar(position: number, duration: number, size = 16) {
+  if (!duration) return "▱".repeat(size);
+  const filled = Math.max(0, Math.min(size, Math.round((position / duration) * size)));
+  return `${"▰".repeat(filled)}${"▱".repeat(size - filled)}`;
+}
+
 export function nowPlayingEmbed(player: Player, track = player.queue.current) {
   const duration = track?.info.duration ?? 0;
   const position = Math.max(0, player.position ?? 0);
   const progress = track?.info.isStream
     ? "`LIVE`"
-    : `\`${formatMs(position)}\` ${progressBar(position, duration)} \`${formatMs(duration)}\``;
+    : `\`${formatMs(position)} / ${formatMs(duration)}\`\n${compactProgressBar(position, duration)}`;
   const filter = player.getData<MusicFilterPreset>("musicFilterPreset") ?? "off";
   const autoplay = player.getData<boolean>("musicAutoplayEnabled") ?? false;
-  const built = musicEmbed("Now Playing", trackLabel(track))
-    .addFields(
-      { name: "Progress", value: progress, inline: false },
-      { name: "Volume", value: `\`${player.volume}%\``, inline: true },
-      { name: "Loop", value: `\`${player.repeatMode}\``, inline: true },
-      { name: "Filter", value: `\`${filter}\``, inline: true },
-      { name: "Autoplay", value: autoplay ? "`on`" : "`off`", inline: true },
-      { name: "Requested By", value: getRequesterName(track), inline: true },
-      { name: "Queue", value: `\`${player.queue.tracks.length} track(s)\``, inline: true }
-    );
+  const voiceChannel = player.voiceChannelId ? `<#${player.voiceChannelId}>` : "Voice channel";
+  const built = new EmbedBuilder()
+    .setColor(palette.electric)
+    .setTitle("Now playing")
+    .setDescription([
+      trackLabel(track),
+      "",
+      `Requested by **${getRequesterName(track)}** • ${voiceChannel}`,
+      "",
+      progress
+    ].join("\n"))
+    .setFooter({
+      text: `${player.volume}% volume • Loop ${player.repeatMode} • Autoplay ${autoplay ? "on" : "off"} • Filter ${filter} • ${player.queue.tracks.length} queued`
+    });
 
   const artwork = track?.info.artworkUrl;
   if (artwork) built.setThumbnail(artwork);
   return built;
+}
+
+export function musicControlsEmbed(player: Player) {
+  const autoplay = player.getData<boolean>("musicAutoplayEnabled") ?? false;
+  const filter = player.getData<MusicFilterPreset>("musicFilterPreset") ?? "off";
+  return new EmbedBuilder()
+    .setColor(palette.electric)
+    .setTitle("Music controls")
+    .setDescription(trackLabel(player.queue.current))
+    .addFields(
+      { name: "Volume", value: `\`${player.volume}%\``, inline: true },
+      { name: "Loop", value: `\`${player.repeatMode}\``, inline: true },
+      { name: "Autoplay", value: autoplay ? "`on`" : "`off`", inline: true },
+      { name: "Filter", value: `\`${filter}\``, inline: true },
+      { name: "Queue", value: `\`${player.queue.tracks.length} track(s)\``, inline: true }
+    );
 }
 
 export function queueEmbed(player: Player, requestedPage = 0) {
@@ -937,37 +962,71 @@ export function queueEmbed(player: Player, requestedPage = 0) {
 
 export function musicControlRows(player?: Player) {
   const paused = Boolean(player?.paused);
-  const autoplay = player?.getData<boolean>("musicAutoplayEnabled") ?? false;
   return [
     new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("music:previous").setEmoji("⏮️").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId(paused ? "music:resume" : "music:pause")
         .setEmoji(paused ? "▶️" : "⏸️")
-        .setLabel(paused ? "Resume" : "Pause")
-        .setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("music:previous").setEmoji("⏮️").setLabel("Previous").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:skip").setEmoji("⏭️").setLabel("Skip").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:stop").setEmoji("⏹️").setLabel("Stop").setStyle(ButtonStyle.Danger),
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("music:skip").setEmoji("⏭️").setStyle(ButtonStyle.Secondary)
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("music:controls")
+        .setEmoji("🎚️")
+        .setLabel("Open controls")
+        .setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("music:stop").setEmoji("✖️").setStyle(ButtonStyle.Secondary)
+    )
+  ];
+}
+
+export function musicExpandedControlRows(player: Player) {
+  const autoplay = player.getData<boolean>("musicAutoplayEnabled") ?? false;
+  return [
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("music:replay").setEmoji("↩️").setLabel("Replay").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("music:loop")
         .setEmoji("🔁")
-        .setLabel(`Loop: ${player?.repeatMode ?? "off"}`)
-        .setStyle(player?.repeatMode === "off" ? ButtonStyle.Secondary : ButtonStyle.Success)
-    ),
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId("music:replay").setEmoji("↩️").setLabel("Replay").setStyle(ButtonStyle.Secondary),
+        .setLabel(`Loop: ${player.repeatMode}`)
+        .setStyle(player.repeatMode === "off" ? ButtonStyle.Secondary : ButtonStyle.Success),
       new ButtonBuilder().setCustomId("music:shuffle").setEmoji("🔀").setLabel("Shuffle").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("music:autoplay")
         .setEmoji("♾️")
         .setLabel(`Auto: ${autoplay ? "on" : "off"}`)
         .setStyle(autoplay ? ButtonStyle.Success : ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:queue:0").setEmoji("📜").setLabel("Queue").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder()
+        .setCustomId("music:queue:0")
+        .setEmoji("📜")
+        .setLabel(`Queue (${player.queue.tracks.length})`)
+        .setStyle(ButtonStyle.Secondary)
+    ),
+    new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("music:volume-down")
+        .setEmoji("🔉")
+        .setLabel("-10%")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(player.volume <= 1),
+      new ButtonBuilder()
+        .setCustomId("music:volume-status")
+        .setLabel(`${player.volume}% volume`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+      new ButtonBuilder()
+        .setCustomId("music:volume-up")
+        .setEmoji("🔊")
+        .setLabel("+10%")
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(player.volume >= 100)
     ),
     new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId("music:filter")
-        .setPlaceholder(`Sound filter: ${player?.getData<MusicFilterPreset>("musicFilterPreset") ?? "off"}`)
+        .setPlaceholder(`Sound filter: ${player.getData<MusicFilterPreset>("musicFilterPreset") ?? "off"}`)
         .addOptions(musicFilterChoices.map((choice) => ({
           label: choice.name,
           value: choice.value,
