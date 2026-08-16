@@ -255,6 +255,72 @@ test("Spotify playlists preserve order and skip unavailable entries", async () =
   assert.equal(resolved.skippedTracks, 1);
 });
 
+test("Spotify playlist authorization uses the configured refresh token", async () => {
+  resetSpotifyResolverCaches();
+  const tokenBodies: string[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    const url = String(input);
+    if (url === "https://accounts.spotify.com/api/token") {
+      tokenBodies.push(String(init?.body));
+      return new Response(JSON.stringify({ access_token: "user-token", expires_in: 3600 }), { status: 200 });
+    }
+    if (url === "https://api.spotify.com/v1/playlists/5lzszfSoySkXHw6Fatyssc") {
+      return new Response(JSON.stringify({ name: "Authorized playlist" }), { status: 200 });
+    }
+    if (url.includes("/v1/playlists/5lzszfSoySkXHw6Fatyssc/items?limit=50&offset=0")) {
+      return new Response(JSON.stringify({
+        total: 1,
+        next: null,
+        items: [{ item: { id: "3n3Ppam7vgaVa1iaRUc9Lp", name: "First", artists: [{ name: "Artist" }], duration_ms: 120_000 } }]
+      }), { status: 200 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const input = parseSpotifyInput("https://open.spotify.com/playlist/5lzszfSoySkXHw6Fatyssc");
+  assert.ok(input);
+
+  const resolved = await resolveSpotifyInput(input, {
+    clientId: "client",
+    clientSecret: "secret",
+    refreshToken: "refresh-token",
+    cacheTtlMs: 3_600_000,
+    fetcher
+  });
+
+  assert.equal(resolved.tracks[0]?.title, "First");
+  assert.match(tokenBodies[0] ?? "", /grant_type=refresh_token/);
+  assert.match(tokenBodies[0] ?? "", /refresh_token=refresh-token/);
+});
+
+test("Spotify playlist errors explain when user authorization is missing", async () => {
+  resetSpotifyResolverCaches();
+  const fetcher: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url === "https://accounts.spotify.com/api/token") {
+      return new Response(JSON.stringify({ access_token: "app-token", expires_in: 3600 }), { status: 200 });
+    }
+    if (url === "https://api.spotify.com/v1/playlists/5lzszfSoySkXHw6Fatyssc") {
+      return new Response(JSON.stringify({ name: "Needs authorization" }), { status: 200 });
+    }
+    if (url.includes("/v1/playlists/5lzszfSoySkXHw6Fatyssc/items?limit=50&offset=0")) {
+      return new Response(JSON.stringify({ error: { status: 401, message: "Valid user authentication required" } }), { status: 401 });
+    }
+    throw new Error(`Unexpected request: ${url}`);
+  };
+  const input = parseSpotifyInput("https://open.spotify.com/playlist/5lzszfSoySkXHw6Fatyssc");
+  assert.ok(input);
+
+  await assert.rejects(
+    () => resolveSpotifyInput(input, {
+      clientId: "client",
+      clientSecret: "secret",
+      cacheTtlMs: 3_600_000,
+      fetcher
+    }),
+    /one-time user authorization/
+  );
+});
+
 test("Spotify playlist work respects the configured concurrency and keeps source order", async () => {
   let active = 0;
   let peak = 0;

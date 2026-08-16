@@ -258,6 +258,8 @@ MUSIC_YTDLP_TIMEOUT_MS=25000
 MUSIC_YTDLP_CACHE_TTL_MS=7200000
 SPOTIFY_CLIENT_ID=
 SPOTIFY_CLIENT_SECRET=
+SPOTIFY_REFRESH_TOKEN=
+SPOTIFY_REDIRECT_URI=http://127.0.0.1:8888/callback
 SPOTIFY_MARKET=IN
 SPOTIFY_CACHE_TTL_MS=3600000
 MUSIC_RESOLVE_CONCURRENCY=3
@@ -271,7 +273,15 @@ java -Xms256M -Xmx1G -jar Lavalink.jar
 
 When `MUSIC_YTDLP_ENABLED=true`, exact YouTube links and `/music play` song-name searches are resolved by yt-dlp first; Lavalink receives the resulting direct audio stream and still owns the Discord voice connection. Song names use Lavalink's quick metadata search before yt-dlp resolves the exact video, while signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` (and never past their provider expiry). Repeated tracks are therefore nearly immediate. This avoids substituting an unrelated SoundCloud upload when YouTube's Lavalink clients are blocked.
 
-Spotify public track, playlist, and album links are supported once `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` are set. blunt38 uses Spotify only for public metadata, resolves a confident YouTube Music match through Lavalink first, optionally falls back to yt-dlp when enabled, then tries a matching SoundCloud result. It never plays Spotify audio or bypasses Spotify DRM. Private, unavailable, and local Spotify tracks are skipped with a clear queue summary. Use `/music play <Spotify URL>` or `!play <Spotify URL>`; the legacy `!play` bridge requires Discord's Message Content Intent and `ENABLE_MESSAGE_CONTENT_INTENT=true`.
+Spotify track and album metadata uses `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`. Spotify now requires a user-authorized access token to enumerate playlist items, so playlist links also need `SPOTIFY_REFRESH_TOKEN`. Add `SPOTIFY_REDIRECT_URI` to the Spotify app dashboard, run `npm run spotify:authorize`, approve the account once, and restart the bot. The helper writes the refresh token to `.env` without printing it, and blunt38 refreshes access automatically afterward.
+
+For a bot running on a VPS, keep the callback on loopback and forward it from the computer running your browser:
+
+```bash
+ssh -L 8888:127.0.0.1:8888 root@your-server
+```
+
+Then run `npm run spotify:authorize` in the bot directory on the VPS and open the printed Spotify URL. blunt38 uses Spotify only for metadata, resolves a confident YouTube Music match through Lavalink first, optionally falls back to yt-dlp when enabled, then tries a matching SoundCloud result. It never plays Spotify audio or bypasses Spotify DRM. Private, unavailable, and local Spotify tracks are skipped with a clear queue summary. Use `/music play <Spotify URL>` or `!play <Spotify URL>`; the legacy `!play` bridge requires Discord's Message Content Intent and `ENABLE_MESSAGE_CONTENT_INTENT=true`.
 
 The upgraded deck includes an exact-result picker, previous and replay controls, timestamp seeking, queue pagination and reordering, session autoplay, and native Lavalink filters for balanced EQ, bass boost, nightcore, vaporwave, and karaoke. `/music settings` or the dashboard Music page configures the guild DJ role, starting volume, and autoplay default. Without a DJ role, everyone in the active voice channel keeps normal control access.
 

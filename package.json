@@ -9,6 +9,7 @@
     "build": "tsc",
     "check": "tsc --noEmit",
     "test": "npm run build && node --test dist/utils/music-control.test.js",
+    "spotify:authorize": "node scripts/spotify-authorize.mjs",
     "deploy:commands": "tsx src/deploy-commands.ts"
   },
   "dependencies": {

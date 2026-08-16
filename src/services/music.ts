@@ -583,6 +583,7 @@ async function resolveSpotifyPlayback(player: Player, input: NonNullable<ReturnT
   const spotify = await resolveSpotifyInput(input, {
     clientId: env.spotifyClientId,
     clientSecret: env.spotifyClientSecret,
+    refreshToken: env.spotifyRefreshToken,
     market: env.spotifyMarket,
     cacheTtlMs: env.spotifyCacheTtlMs
   });

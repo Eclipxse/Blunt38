@@ -70,6 +70,7 @@ export const env = {
     : 3,
   spotifyClientId: process.env.SPOTIFY_CLIENT_ID?.trim(),
   spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET?.trim(),
+  spotifyRefreshToken: process.env.SPOTIFY_REFRESH_TOKEN?.trim(),
   spotifyMarket: process.env.SPOTIFY_MARKET?.trim(),
   spotifyCacheTtlMs: Number.isFinite(spotifyCacheTtlMs)
     ? Math.max(60000, Math.min(43200000, spotifyCacheTtlMs))

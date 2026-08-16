@@ -29,6 +29,7 @@ export type SpotifyResolvedInput = {
 export type SpotifyResolverOptions = {
   clientId?: string;
   clientSecret?: string;
+  refreshToken?: string;
   cacheTtlMs: number;
   market?: string;
   fetcher?: typeof fetch;
@@ -274,13 +275,19 @@ async function spotifyRequest<T>(path: string, options: SpotifyResolverOptions):
 
   if (response.status === 401) {
     const credentials = spotifyCredentials(options);
-    tokenCache.delete(credentials.clientId);
+    tokenCache.delete(spotifyTokenCacheKey(credentials.clientId, options.refreshToken));
     response = await spotifyRequestWithToken(path, options, fetcher, true);
   }
 
   if (response.status === 429) {
     await waitForRateLimit(response);
     response = await spotifyRequestWithToken(path, options, fetcher, false);
+  }
+
+  if (response.status === 401 && path.includes("/playlists/") && !options.refreshToken?.trim()) {
+    throw new SpotifyResolverError(
+      "Spotify playlist links need one-time user authorization. Run npm run spotify:authorize, then restart the bot."
+    );
   }
 
   return parseSpotifyResponse<T>(response);
@@ -302,17 +309,22 @@ async function spotifyRequestWithToken(
 async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: typeof fetch, forceRefresh: boolean) {
   const credentials = spotifyCredentials(options);
   const now = options.now ?? Date.now;
-  const cached = tokenCache.get(credentials.clientId);
+  const refreshToken = options.refreshToken?.trim();
+  const cacheKey = spotifyTokenCacheKey(credentials.clientId, refreshToken);
+  const cached = tokenCache.get(cacheKey);
   if (!forceRefresh && cached && cached.expiresAt > now()) return cached.value;
 
   const authorization = Buffer.from(`${credentials.clientId}:${credentials.clientSecret}`).toString("base64");
+  const tokenBody = refreshToken
+    ? new URLSearchParams({ grant_type: "refresh_token", refresh_token: refreshToken })
+    : new URLSearchParams({ grant_type: "client_credentials" });
   let response = await spotifyFetch(fetcher, "https://accounts.spotify.com/api/token", {
     method: "POST",
     headers: {
       Authorization: `Basic ${authorization}`,
       "Content-Type": "application/x-www-form-urlencoded"
     },
-    body: "grant_type=client_credentials",
+    body: tokenBody,
     signal: AbortSignal.timeout(15_000)
   });
 
@@ -324,12 +336,17 @@ async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: type
         Authorization: `Basic ${authorization}`,
         "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: "grant_type=client_credentials",
+      body: tokenBody,
       signal: AbortSignal.timeout(15_000)
     });
   }
 
   if (!response.ok) {
+    if (refreshToken) {
+      throw new SpotifyResolverError(
+        "Spotify user authorization expired or was revoked. Run npm run spotify:authorize again."
+      );
+    }
     throw new SpotifyResolverError("Spotify authentication failed. Check SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.");
   }
 
@@ -340,7 +357,7 @@ async function spotifyAccessToken(options: SpotifyResolverOptions, fetcher: type
     : 0;
   if (!value || expiresInSeconds <= 0) throw new SpotifyResolverError("Spotify returned an invalid access token response.");
 
-  tokenCache.set(credentials.clientId, {
+  tokenCache.set(cacheKey, {
     value,
     expiresAt: now() + Math.max(1_000, expiresInSeconds * 1_000 - tokenSafetyMs)
   });
@@ -364,6 +381,10 @@ function spotifyCredentials(options: SpotifyResolverOptions) {
     throw new SpotifyResolverError("Spotify is not configured. Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET to .env, then restart the bot.");
   }
   return { clientId, clientSecret };
+}
+
+function spotifyTokenCacheKey(clientId: string, refreshToken?: string) {
+  return `${clientId}:${refreshToken?.trim() ? "user" : "app"}`;
 }
 
 function spotifyApiUrl(path: string, market?: string) {
