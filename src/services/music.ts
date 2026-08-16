@@ -581,10 +581,6 @@ function warmSpotifyQueue(player: Player, deferred: SpotifyDeferredQueue): Promi
 }
 
 async function resolveSpotifyPlayback(player: Player, input: NonNullable<ReturnType<typeof parseSpotifyInput>>, requester: User): Promise<MusicPlayResult> {
-  if (!env.musicYtDlpEnabled) {
-    throw new Error("Spotify link playback needs MUSIC_YTDLP_ENABLED=true so blunt38 can resolve a playable YouTube source.");
-  }
-
   const spotify = await resolveSpotifyInput(input, {
     clientId: env.spotifyClientId,
     clientSecret: env.spotifyClientSecret,
@@ -641,24 +637,49 @@ async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrack
   const queries = spotifySearchQueries(spotify);
   let lastError: unknown;
 
+  // A healthy Lavalink YouTube source is much quicker than spawning yt-dlp and
+  // lets Spotify links work even when the optional direct-stream resolver is off.
   for (const query of queries) {
-    try {
-      // yt-dlp can search and extract in one request. Previously every Spotify track
-      // waited for a second Lavalink ytsearch before this resolver even began.
-      console.info(`[music:spotify-youtube] resolving=${JSON.stringify(query)}`);
-      const result = await searchYoutubeWithYtDlp(player, query, requester);
-      const track = result.tracks[0];
-      if (!track) throw new Error("yt-dlp resolved the match, but Lavalink could not load its audio stream.");
-      if (!isSpotifyCandidate(track, spotify)) {
-        lastError = new Error("yt-dlp found a YouTube result that did not confidently match the Spotify track.");
-        continue;
+    for (const source of spotifyYoutubeSearchSources()) {
+      try {
+        console.info(`[music:spotify-youtube] source=${source} searching=${JSON.stringify(query)}`);
+        const result = await player.search({ query, source }, requester);
+        const track = result.tracks.find((candidate) => isSpotifyCandidate(candidate, spotify));
+        if (!track) continue;
+
+        applySpotifyMetadata(track, spotify);
+        console.info(`[music:spotify-youtube] source=${source} matched=${JSON.stringify(track.info.title)}`);
+        return { result, track };
+      } catch (error) {
+        lastError = error;
+        console.warn(
+          `[music:spotify-youtube-failed] source=${source} query=${JSON.stringify(query)}`,
+          error instanceof Error ? error.message : error
+        );
       }
-      applySpotifyMetadata(track, spotify);
-      console.info(`[music:spotify-youtube] matched=${JSON.stringify(track.info.title)}`);
-      return { result, track };
-    } catch (error) {
-      lastError = error;
-      console.warn(`[music:spotify-youtube-failed] query=${JSON.stringify(query)}`, error instanceof Error ? error.message : error);
+    }
+  }
+
+  // Keep yt-dlp available as a last resort for installations that explicitly
+  // enable it, but do not make it a requirement for every Spotify link.
+  if (env.musicYtDlpEnabled) {
+    for (const query of queries) {
+      try {
+        console.info(`[music:spotify-ytdlp] resolving=${JSON.stringify(query)}`);
+        const result = await searchYoutubeWithYtDlp(player, query, requester);
+        const track = result.tracks[0];
+        if (!track) throw new Error("yt-dlp resolved the match, but Lavalink could not load its audio stream.");
+        if (!isSpotifyCandidate(track, spotify)) {
+          lastError = new Error("yt-dlp found a YouTube result that did not confidently match the Spotify track.");
+          continue;
+        }
+        applySpotifyMetadata(track, spotify);
+        console.info(`[music:spotify-ytdlp] matched=${JSON.stringify(track.info.title)}`);
+        return { result, track };
+      } catch (error) {
+        lastError = error;
+        console.warn(`[music:spotify-ytdlp-failed] query=${JSON.stringify(query)}`, error instanceof Error ? error.message : error);
+      }
     }
   }
 
@@ -681,6 +702,15 @@ async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrack
   throw lastError instanceof Error
     ? lastError
     : new Error(`Couldn't find a playable version of: ${spotify.artist} - ${spotify.title}`);
+}
+
+function spotifyYoutubeSearchSources(): SearchPlatform[] {
+  const configured = env.musicSearchSource as SearchPlatform;
+  const configuredName = configured.toString();
+  const sources = configuredName.startsWith("yt")
+    ? [configured, configuredName.startsWith("ytm") ? "ytsearch" : "ytmsearch"]
+    : ["ytmsearch", "ytsearch"];
+  return [...new Set(sources)] as SearchPlatform[];
 }
 
 function isSpotifyCandidate(track: MusicTrack, spotify: SpotifyTrackMetadata) {
