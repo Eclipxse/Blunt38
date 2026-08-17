@@ -69,6 +69,52 @@ const automationKeys = new Set<AutomationKey>([
   "logs"
 ]);
 
+const dashboardDemo: { me: MeResponse; payload: GuildPayload } = {
+  me: {
+    user: { id: "preview-user", username: "raven", avatar: null },
+    guilds: [{ id: "preview-guild", name: "BLUNT38 AFTER DARK", icon: null }]
+  },
+  payload: {
+    channels: [
+      { id: "general", name: "general", type: 0 },
+      { id: "welcome", name: "new-blood", type: 0 },
+      { id: "logs", name: "staff-evidence", type: 0 },
+      { id: "tickets", name: "open-a-ticket", type: 4 },
+      { id: "voice", name: "create-a-room", type: 2 }
+    ],
+    roles: [
+      { id: "dj", name: "DECK BOSS", color: 0, position: 5, managed: false },
+      { id: "staff", name: "NIGHT STAFF", color: 0, position: 4, managed: false }
+    ],
+    config: {
+      guildId: "preview-guild",
+      welcomeChannelId: "welcome",
+      welcomeMessage: "Welcome {user}. Keep it loud, keep it moving.",
+      goodbyeChannelId: null,
+      goodbyeMessage: "{user} left {server}. Their loss.",
+      logChannelId: "logs",
+      ticketCategoryId: "tickets",
+      supportRoleId: "staff",
+      verifiedRoleId: null,
+      autoRoleId: null,
+      tempVoiceJoinChannelId: "voice",
+      tempVoiceCategoryId: null,
+      birthdayChannelId: null,
+      levelingEnabled: false,
+      levelUpChannelId: null,
+      aiResponderEnabled: true,
+      aiResponderChannelId: "general",
+      aiResponderPrompt: "Keep it short, sharp, funny, and never corporate.",
+      aiResponderPersona: "sassy",
+      musicDjRoleId: "dj",
+      musicDefaultVolume: 82,
+      musicAutoplayEnabled: true,
+      accentColor: 0xf1f0ed,
+      updatedAt: null
+    }
+  }
+};
+
 function routeFromLocation() {
   if (typeof window === "undefined") {
     return {
@@ -92,6 +138,13 @@ function routeFromLocation() {
 
 export function DashboardApp() {
   const initialRoute = useMemo(routeFromLocation, []);
+  const demoMode = useMemo(
+    () =>
+      process.env.NODE_ENV === "development" &&
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("demo") === "dashboard",
+    []
+  );
   const [me, setMe] = useState<MeResponse | null>(null);
   const [selectedGuildId, setSelectedGuildId] = useState("");
   const [payload, setPayload] = useState<GuildPayload | null>(null);
@@ -151,6 +204,16 @@ export function DashboardApp() {
     setLoading(true);
     setError(null);
 
+    if (demoMode) {
+      const nextPayload = structuredClone(dashboardDemo.payload);
+      setMe(dashboardDemo.me);
+      setSelectedGuildId(dashboardDemo.me.guilds[0].id);
+      setPayload(nextPayload);
+      setSavedConfig(structuredClone(nextPayload.config));
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch("/api/me", { cache: "no-store" });
       if (response.status === 401) {
@@ -188,12 +251,21 @@ export function DashboardApp() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [demoMode]);
 
   const loadGuild = useCallback(async (guildId: string) => {
     if (!guildId) return;
     setConfigLoading(true);
     setError(null);
+
+    if (demoMode) {
+      const nextPayload = structuredClone(dashboardDemo.payload);
+      setPayload(nextPayload);
+      setSavedConfig(structuredClone(nextPayload.config));
+      setDirty(false);
+      setConfigLoading(false);
+      return;
+    }
 
     try {
       const response = await fetch(`/api/guilds/${guildId}/config`, {
@@ -216,7 +288,7 @@ export function DashboardApp() {
     } finally {
       setConfigLoading(false);
     }
-  }, []);
+  }, [demoMode]);
 
   useEffect(() => {
     void loadMe();
@@ -443,8 +515,14 @@ export function DashboardApp() {
     );
   }
 
+  const activeRouteLabel = navigation.find((item) => item.key === view)?.label ?? "Home";
+
   return (
-    <main className={`control-app ${studioFocused ? "studio-focus" : ""}`}>
+    <main
+      className={`control-app ${studioFocused ? "studio-focus" : ""}`}
+      data-view={view}
+      data-automation={automation ?? undefined}
+    >
       <DashboardSignalBackdrop />
       <aside className="control-rail">
         <button
@@ -454,6 +532,10 @@ export function DashboardApp() {
           onClick={() => navigate("home")}
         >
           <img src="/brand/blunt38-logo.jpg" alt="" />
+          <span className="control-brand-copy">
+            <strong>blunt38</strong>
+            <small>Private control</small>
+          </span>
         </button>
 
         <nav className="control-navigation" aria-label="Primary navigation">
@@ -494,6 +576,10 @@ export function DashboardApp() {
 
       <section className="control-main">
         <header className="control-topbar">
+          <div className="control-route" aria-hidden="true">
+            <span>Control /</span>
+            <strong>{activeRouteLabel}</strong>
+          </div>
           <div className="guild-control">
             {selectedGuild?.icon ? (
               <img src={selectedGuild.icon} alt="" />
@@ -523,7 +609,7 @@ export function DashboardApp() {
               onClick={() => setCommandOpen(true)}
             >
               <Search size={16} />
-              <span>Find</span>
+              <span>Jump</span>
               <kbd>Ctrl K</kbd>
             </button>
             <button
@@ -618,7 +704,7 @@ export function DashboardApp() {
 
       {dirty ? (
         <div className="unsaved-bar" role="status">
-          <span>Unsaved changes</span>
+          <span>You changed shit.</span>
           <button type="button" onClick={discardChanges}>
             <RotateCcw size={16} />
             Discard

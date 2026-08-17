@@ -166,11 +166,11 @@ export function HomeView({
   const completion = Math.round((active.length / systems.length) * 100);
 
   return (
-    <div className="minimal-page">
+    <div className="minimal-page home-page">
       <PageHeading
         eyebrow="Home"
-        title="Server control"
-        description="Only the settings that need your attention."
+        title="Run this shit."
+        description="Your server. Your fucking rules. Fix what’s broken, arm what matters, then get out of the way."
       />
 
       <section className="setup-progress" aria-label={`${completion}% configured`}>
@@ -275,11 +275,11 @@ export function AutomationsView({
     <div className="minimal-page automations-page">
       <PageHeading
         eyebrow="Automations"
-        title={selected ? automationMeta.find((item) => item.key === selected)?.label ?? "Automation" : "Choose a system"}
+        title={selected ? automationMeta.find((item) => item.key === selected)?.label ?? "Automation" : "Make the server behave."}
         description={
           selected
-            ? "Configure one workflow without the rest of the dashboard getting in the way."
-            : "Select the part of your server you want blunt38 to handle."
+            ? "Change the rule without the rest of the dashboard getting in your face."
+            : "Pick the system. Set the rules. Let blunt38 handle the boring shit."
         }
       />
 
@@ -313,6 +313,10 @@ export function AutomationsView({
                   <ArrowLeft size={17} />
                   Automations
                 </button>
+                <button type="button" onClick={onPreview}>
+                  <Eye size={16} />
+                  Preview
+                </button>
               </div>
               <AutomationEditor
                 automation={selected}
@@ -323,8 +327,8 @@ export function AutomationsView({
           ) : (
             <div className="editor-empty">
               <ListChecks size={24} />
-              <strong>Select an automation</strong>
-              <p>Its focused settings will open here.</p>
+              <strong>Pick a system.</strong>
+              <p>Its rules open here. No clutter. No bullshit.</p>
             </div>
           )}
         </section>
@@ -637,11 +641,11 @@ export function MusicView({
   ];
 
   return (
-    <div className="minimal-page">
+    <div className="minimal-page music-page">
       <PageHeading
         eyebrow="Music"
-        title="Voice controls"
-        description="Playback stays inside Discord. This is the command map."
+        title="Make the room shake."
+        description="Set the defaults here. Run the queue where it belongs: inside Discord."
       />
 
       <EditorSurface
@@ -817,7 +821,7 @@ function EditorSurface({
         </div>
         <div className="editor-actions">
           {preview ? (
-            <button type="button" onClick={preview}>
+            <button className="editor-preview-action" type="button" onClick={preview}>
               <Eye size={16} />
               Preview
             </button>
@@ -840,8 +844,7 @@ function PageHeading({
   description: string;
 }) {
   return (
-    <header className="minimal-page-heading">
-      <span className="minimal-eyebrow">{eyebrow}</span>
+    <header className="minimal-page-heading" data-section={eyebrow}>
       <h1>{title}</h1>
       <p>{description}</p>
     </header>
