@@ -39,23 +39,10 @@ If it says the server started on port `2333`, Lavalink is alive.
 
 ## Keep It Running With systemd
 
-Create `/etc/systemd/system/lavalink.service`:
+Install the tracked service unit:
 
-```ini
-[Unit]
-Description=Lavalink Music Server
-After=network.target
-
-[Service]
-Type=simple
-WorkingDirectory=/opt/lavalink
-ExecStart=/usr/bin/java -Djava.net.preferIPv4Stack=true -Xms256M -Xmx1G -jar /opt/lavalink/Lavalink.jar
-Restart=always
-RestartSec=10
-User=root
-
-[Install]
-WantedBy=multi-user.target
+```bash
+sudo install -m 0644 /opt/blunt38/lavalink/lavalink.service /etc/systemd/system/lavalink.service
 ```
 
 Enable it:
@@ -63,13 +50,13 @@ Enable it:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now lavalink
-sudo systemctl status lavalink
+sudo systemctl status lavalink --no-pager -l
 ```
 
 Logs:
 
 ```bash
-journalctl -u lavalink -f
+sudo journalctl -u lavalink -n 100 --no-pager
 ```
 
 ## Bot `.env`
@@ -89,6 +76,18 @@ MUSIC_YTDLP_TIMEOUT_MS=25000
 ```
 
 The `LAVALINK_PASSWORD` must match `lavalink.server.password` in `application.yml`.
+
+Verify the authenticated health endpoint before testing Discord playback:
+
+```bash
+set -a
+source /opt/blunt38/.env
+set +a
+curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
+  "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
+```
+
+The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart.
 
 When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp resolves only the requested YouTube video or the first result for the requested song name; Lavalink continues to handle queueing, filters, seeking, and Discord audio.
 
