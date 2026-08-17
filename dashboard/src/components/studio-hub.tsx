@@ -95,10 +95,9 @@ export function StudioHub({
 
   return (
     <div className="minimal-page minimal-studio-index">
-      <header className="minimal-page-heading">
-        <span className="minimal-eyebrow">Studio</span>
-        <h1>Message design</h1>
-        <p>Choose one Discord surface to edit.</p>
+      <header className="minimal-page-heading" data-section="Studio">
+        <h1>Make Discord look dangerous.</h1>
+        <p>Every message surface, cut your way. Pick one and make it impossible to ignore.</p>
       </header>
 
       <section className="studio-module-list">

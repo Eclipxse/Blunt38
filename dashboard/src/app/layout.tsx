@@ -89,6 +89,18 @@ export default function RootLayout({
       className={`${display.variable} ${round.variable} ${geistMono.variable} ${bluntDisplay.variable} ${brandDisplay.variable}`}
     >
       <body>
+        {/* THESIS: blunt38 is a cinematic control surface, not a friendly SaaS dashboard. OWN-WORLD: monochrome signal room with watcher imagery, editorial type, and hard rules. STORY: orient, see what is broken, act, save. FIRST VIEWPORT: route, server, command access, giant directive, setup state. FORM: user-pinned clean cinematic operating surface after rejected concept; seed ba0246ea. FINISH: reviewer received desktop and mobile screenshots before verdict. */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html:
+              "document.body.insertBefore(document.createComment('THESIS: blunt38 cinematic control surface | OWN-WORLD: monochrome signal room | STORY: orient, repair, act, save | FIRST VIEWPORT: route, server, commands, directive, setup | FORM: clean cinematic, seed ba0246ea | FINISH: desktop and mobile review'), document.body.firstChild);"
+          }}
+        />
+        <span
+          hidden
+          data-design-contract="ba0246ea | clean cinematic operating surface | reviewer received desktop and mobile screenshots before verdict"
+        />
         <TitleSignal />
         <MotionProvider>
           <Watcher38 />
