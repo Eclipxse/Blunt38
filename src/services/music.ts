@@ -106,7 +106,7 @@ type MusicRecoveryState = {
   originalAuthor?: string;
   attempts: number;
   attemptedIdentifiers: string[];
-  attemptedSources: SearchPlatform[];
+  attemptedSources: Array<SearchPlatform | "yt-dlp">;
 };
 
 export type MusicFilterPreset = "off" | "balanced" | "bassboost" | "nightcore" | "vaporwave" | "karaoke";
@@ -468,21 +468,7 @@ async function playInput(
 
   const searchPromise = (spotifyInput
     ? resolveSpotifyPlayback(player, spotifyInput, context.user)
-    : (useYtDlp
-      ? searchYoutubeWithYtDlp(player, query, context.user).then((result) => ({
-          result,
-          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
-          sourceLabel: "yt-dlp",
-          spotifySummary: undefined,
-          spotifyDeferredQueue: undefined
-        }))
-      : player.search(searchQuery, context.user).then((result) => ({
-          result,
-          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
-          sourceLabel: isUrl(query) ? "url" : env.musicSearchSource,
-          spotifySummary: undefined,
-          spotifyDeferredQueue: undefined
-        }))))
+    : resolveStandardPlayback(player, query, context.user, useYtDlp, searchQuery))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
       return result;
@@ -496,16 +482,8 @@ async function playInput(
     });
 
   const connectPromise = shouldConnect
-    ? player.connect()
-      .then(() => {
-        connectMs = performance.now() - searchStartedAt;
-      })
-      .catch((error: unknown) => {
-        console.error(
-          `[music:connect-error] guild=${context.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
-          error
-        );
-        explainLavalinkError(error);
+    ? connectPlayerWithRetry(player, context.guildId).then((elapsed) => {
+        connectMs = elapsed;
       })
     : Promise.resolve();
 
@@ -547,6 +525,95 @@ async function playInput(
     spotifySummary: resolved.spotifySummary,
     spotifyQueueWarmup
   };
+}
+
+async function connectPlayerWithRetry(player: Player, guildId: string | null) {
+  const startedAt = performance.now();
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await player.connect();
+      return performance.now() - startedAt;
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `[music:connect-error] guild=${guildId} node=${player.node.id} attempt=${attempt}/2 `
+        + `after=${Math.round(performance.now() - startedAt)}ms`,
+        error
+      );
+      if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 750));
+    }
+  }
+
+  explainLavalinkError(lastError);
+}
+
+async function resolveStandardPlayback(
+  player: Player,
+  query: string,
+  requester: User,
+  useYtDlp: boolean,
+  searchQuery: string | { query: string; source: SearchPlatform }
+): Promise<MusicPlayResult> {
+  let lastError: unknown;
+
+  if (useYtDlp) {
+    try {
+      const result = await searchYoutubeWithYtDlp(player, query, requester);
+      if (result.tracks.length) {
+        return {
+          result,
+          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+          sourceLabel: "yt-dlp"
+        };
+      }
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `[music:ytdlp-primary-failed] query=${JSON.stringify(query)}; trying Lavalink sources`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  const searches = typeof searchQuery === "string"
+    ? [{ input: searchQuery, sourceLabel: "url" }]
+    : standardSearchSources().map((source) => ({
+        input: { query, source },
+        sourceLabel: musicSourceLabel(source)
+      }));
+
+  for (const search of searches) {
+    try {
+      const result = await player.search(search.input, requester);
+      if (!result.tracks.length) continue;
+      return {
+        result,
+        added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+        sourceLabel: search.sourceLabel
+      };
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `[music:source-search-failed] source=${search.sourceLabel} query=${JSON.stringify(query)}`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("No tracks found from the available music sources.");
+}
+
+function standardSearchSources(): SearchPlatform[] {
+  const configured = env.musicSearchSource as SearchPlatform;
+  const configuredName = configured.toString();
+  const sources: SearchPlatform[] = configuredName.startsWith("ytm")
+    ? [configured, "ytsearch", "scsearch"]
+    : configuredName.startsWith("yt")
+      ? [configured, "ytmsearch", "scsearch"]
+      : [configured, "ytmsearch", "ytsearch", "scsearch"];
+  return [...new Set(sources)];
 }
 
 export function cancelSpotifyQueueWarmup(player: Player) {
@@ -1182,7 +1249,7 @@ function recordPlaybackFailure(player: Player, track: MusicTrack | null, detail:
 }
 
 async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | null, requester: User) {
-  if (!failedTrack || isYoutubeTrack(failedTrack)) return null;
+  if (!failedTrack) return null;
 
   const failedIdentifier = musicTrackKey(failedTrack);
   const state = player.getData<MusicRecoveryState>("musicRecoveryState") ?? {
@@ -1196,6 +1263,42 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
   if (state.attempts >= maxPlaybackRecoveryAttempts) return null;
 
   const query = `${state.originalTitle} ${state.originalAuthor ?? ""}`.trim();
+  if (
+    env.musicYtDlpEnabled
+    && isYoutubeTrack(failedTrack)
+    && failedTrack.userData?.blunt38Resolver !== "yt-dlp"
+    && !state.attemptedSources.includes("yt-dlp")
+  ) {
+    state.attemptedSources.push("yt-dlp");
+    player.setData("musicRecoveryState", state);
+
+    try {
+      const exactTarget = failedTrack.info.uri?.startsWith("http") ? failedTrack.info.uri : undefined;
+      const result = await searchYoutubeWithYtDlp(
+        player,
+        query,
+        requester,
+        exactTarget
+      );
+      const candidate = result.tracks[0];
+      if (candidate) {
+        state.attempts += 1;
+        const candidateKey = musicTrackKey(candidate);
+        if (candidateKey) state.attemptedIdentifiers.push(candidateKey);
+        player.setData("musicRecoveryState", state);
+        return {
+          source: "yt-dlp" as const,
+          sourceLabel: "yt-dlp direct audio",
+          track: candidate
+        };
+      }
+    } catch (error) {
+      console.error(
+        `[music:recovery-ytdlp-error] guild=${player.guildId} detail=${playbackFailureDetail(error)}`
+      );
+    }
+  }
+
   for (const source of playbackRecoverySources()) {
     if (state.attemptedSources.includes(source)) continue;
     state.attemptedSources.push(source);
