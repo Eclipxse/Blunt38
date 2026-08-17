@@ -29,6 +29,13 @@ const bluntDisplay = localFont({
   display: "swap"
 });
 
+const brandDisplay = localFont({
+  src: "../../public/fonts/BlackOpsOne.ttf",
+  variable: "--font-brand-display",
+  weight: "400",
+  display: "swap"
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://panel.eclipxse.in"),
   title: {
@@ -79,7 +86,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${round.variable} ${geistMono.variable} ${bluntDisplay.variable}`}
+      className={`${display.variable} ${round.variable} ${geistMono.variable} ${bluntDisplay.variable} ${brandDisplay.variable}`}
     >
       <body>
         <TitleSignal />
