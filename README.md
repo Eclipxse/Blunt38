@@ -399,6 +399,12 @@ curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
   "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
 ```
 
+If Lavalink is healthy but playback reports `Track was stuck`, update yt-dlp,
+set `MUSIC_YTDLP_ENABLED=true` and `MUSIC_YTDLP_PATH=/usr/local/bin/yt-dlp`
+in `/opt/blunt38/.env`, then restart the bot. YouTube timeouts now fall back to
+other configured sources, and stalled YouTube tracks retry through yt-dlp direct
+audio before the deck reports a final failure.
+
 ## // opsec, because apparently we need to say it
 
 - Never commit `.env`.

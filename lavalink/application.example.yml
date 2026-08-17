@@ -39,7 +39,8 @@ lavalink:
     frameBufferDurationMs: 5000
     opusEncodingQuality: 10
     resamplingQuality: LOW
-    trackStuckThresholdMs: 10000
+    # Give remote sources enough time to emit their first audio frames on a VPS.
+    trackStuckThresholdMs: 30000
     useSeekGhosting: true
     playerUpdateInterval: 5
     youtubeSearchEnabled: true
