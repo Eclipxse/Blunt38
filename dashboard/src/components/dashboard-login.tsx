@@ -37,7 +37,7 @@ export function DashboardLogin({ error }: { error: string | null }) {
     >
       <LiquidPreloader onComplete={finishBoot} />
       <div className="login-signal-field" aria-hidden="true">
-        <DotShift className="login-dot-shift" color="#aaa2ef" spacing={24} />
+        <DotShift className="login-dot-shift" color="#b8b8b4" spacing={24} />
         <ParticleWord className="login-particle-word" text="BLUNT38" />
       </div>
       <div className="minimal-login-shade" />
@@ -54,7 +54,7 @@ export function DashboardLogin({ error }: { error: string | null }) {
 
       <section className="minimal-login-copy">
         <h1>
-          <TextGlitch text="Bitch, do what you want." />
+          <TextGlitch text="Bitch, do what you want." enableShadows={false} />
         </h1>
         <p>
           Your server, your rules. Music, AI, roles, chaos. blunt38 handles the
