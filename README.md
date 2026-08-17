@@ -389,6 +389,16 @@ curl -H "Authorization: youshallnotpass" http://127.0.0.1:2333/v4/info
 | Dashboard OAuth fails | Redirect URI and `DASHBOARD_BASE_URL` do not match exactly |
 | Commands are missing | Deploy commands again and verify `DISCORD_CLIENT_ID` |
 
+The bot keeps retrying its Lavalink node, so a late or restarted audio service no longer requires a second bot restart. Repair and verify the VPS service with:
+
+```bash
+sudo systemctl restart lavalink
+sudo systemctl status lavalink --no-pager -l
+set -a; source /opt/blunt38/.env; set +a
+curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
+  "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
+```
+
 ## // opsec, because apparently we need to say it
 
 - Never commit `.env`.

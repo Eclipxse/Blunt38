@@ -125,7 +125,7 @@ const queuePageSize = 8;
 const maxPlaybackRecoveryAttempts = 2;
 
 const lavalinkUnavailableMessage =
-  "Lavalink is not ready right now. Start/restart Lavalink, wait until /v4/info responds, then restart the bot so it can attach to a usable node.";
+  "Lavalink is not ready right now. Start/restart Lavalink and wait until /v4/info responds. The bot will attach automatically when the node is healthy.";
 
 function isMissingLavalinkNodeError(error: unknown) {
   return error instanceof Error && /no lavalink node/i.test(error.message);
@@ -147,7 +147,9 @@ export function initMusic(client: Client<true>) {
         host: env.lavalinkHost,
         port: env.lavalinkPort,
         authorization: env.lavalinkPassword,
-        secure: env.lavalinkSecure
+        secure: env.lavalinkSecure,
+        retryAmount: Number.MAX_SAFE_INTEGER,
+        retryDelay: 10_000
       }
     ],
     sendToShard: (guildId, payload) => client.guilds.cache.get(guildId)?.shard?.send(payload),
@@ -204,6 +206,18 @@ export function initMusic(client: Client<true>) {
 
   manager.nodeManager.on("connect", (node) => {
     console.log(`Lavalink node "${node.id}" connected.`);
+  });
+
+  manager.nodeManager.on("disconnect", (node, reason) => {
+    console.warn(
+      `Lavalink node "${node.id}" disconnected${reason.reason ? `: ${reason.reason}` : "."} Retrying automatically.`
+    );
+  });
+
+  manager.nodeManager.on("reconnecting", (node) => {
+    console.info(
+      `Lavalink node "${node.id}" reconnect attempt ${node.reconnectionAttemptCount}.`
+    );
   });
 
   manager.nodeManager.on("error", (node, error) => {
@@ -326,10 +340,14 @@ export function initMusic(client: Client<true>) {
     await updateMusicPanel(client, player, musicEmbed("Queue Finished", "No more tracks in the queue."));
   });
 
-  void manager.init({
-    id: client.user.id,
-    username: client.user.username
-  });
+  void manager
+    .init({
+      id: client.user.id,
+      username: client.user.username
+    })
+    .catch((error: unknown) => {
+      console.error("Failed to initialize Lavalink. Automatic retries remain active.", error);
+    });
 
   return manager;
 }
@@ -356,7 +374,7 @@ export async function createOrGetMusicPlayer(context: MusicRequestContext) {
   }
 
   if (!musicIsReady() || !manager) {
-    throw new Error("Lavalink is offline. Start Lavalink on the VPS, then restart or wait for the bot to reconnect.");
+    throw new Error(lavalinkUnavailableMessage);
   }
 
   const member = context.guild.members.cache.get(context.user.id)

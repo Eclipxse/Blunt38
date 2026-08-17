@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { DM_Sans, IBM_Plex_Mono, Silkscreen } from "next/font/google";
 import { MotionProvider } from "@/components/motion-provider";
 import { TitleSignal } from "@/components/title-signal";
@@ -20,6 +21,12 @@ const geistMono = IBM_Plex_Mono({
   variable: "--font-geist-mono",
   weight: ["400", "500", "600"],
   subsets: ["latin"]
+});
+
+const bluntDisplay = localFont({
+  src: "../../public/fonts/Unbounded.ttf",
+  variable: "--font-blunt-display",
+  display: "swap"
 });
 
 export const metadata: Metadata = {
@@ -70,7 +77,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${display.variable} ${round.variable} ${geistMono.variable}`}>
+    <html
+      lang="en"
+      className={`${display.variable} ${round.variable} ${geistMono.variable} ${bluntDisplay.variable}`}
+    >
       <body>
         <TitleSignal />
         <MotionProvider>
