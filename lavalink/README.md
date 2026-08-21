@@ -98,9 +98,9 @@ curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
   "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
 ```
 
-The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: if a YouTube stream stalls, the bot retries it through yt-dlp direct audio and then through another search source.
+The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: ordinary song-name searches use Lavalink's fast path, while direct YouTube links and stalled YouTube tracks use yt-dlp direct audio before another search source is tried.
 
-When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp resolves only the requested YouTube video or the first result for the requested song name; Lavalink continues to handle queueing, filters, seeking, and Discord audio.
+When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp resolves direct YouTube links and recovery attempts; Lavalink continues to handle normal song searches, queueing, filters, seeking, and Discord audio.
 
 ## Spotify Links
 

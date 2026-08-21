@@ -37,13 +37,13 @@ export type ResolvedYoutubeAudio = {
   isLive: boolean;
 };
 
-export function shouldResolveYoutubeInput(query: string) {
+export function shouldPreferYoutubeResolver(query: string) {
   try {
     const parsed = new URL(query);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     return host === "youtu.be" || host === "youtube.com" || host.endsWith(".youtube.com");
   } catch {
-    return true;
+    return false;
   }
 }
 

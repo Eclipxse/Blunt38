@@ -34,7 +34,7 @@ import { buildVisualAttachment } from "./visual-message.js";
 import {
   getCachedYoutubeAudio,
   resolveYoutubeAudio,
-  shouldResolveYoutubeInput,
+  shouldPreferYoutubeResolver,
   type ResolvedYoutubeAudio
 } from "./youtube-resolver.js";
 import {
@@ -457,7 +457,7 @@ async function playInput(
   const { player, shouldConnect } = await createOrGetMusicPlayer(context);
   cancelSpotifyQueueWarmup(player);
   const spotifyInput = parseSpotifyInput(query);
-  const useYtDlp = env.musicYtDlpEnabled && shouldResolveYoutubeInput(query);
+  const preferYtDlp = env.musicYtDlpEnabled && shouldPreferYoutubeResolver(query);
   const searchQuery = isUrl(query)
     ? query
     : { query, source: env.musicSearchSource as SearchPlatform };
@@ -468,7 +468,7 @@ async function playInput(
 
   const searchPromise = (spotifyInput
     ? resolveSpotifyPlayback(player, spotifyInput, context.user)
-    : resolveStandardPlayback(player, query, context.user, useYtDlp, searchQuery))
+    : resolveStandardPlayback(player, query, context.user, preferYtDlp, searchQuery))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
       return result;
@@ -553,12 +553,12 @@ async function resolveStandardPlayback(
   player: Player,
   query: string,
   requester: User,
-  useYtDlp: boolean,
+  preferYtDlp: boolean,
   searchQuery: string | { query: string; source: SearchPlatform }
 ): Promise<MusicPlayResult> {
   let lastError: unknown;
 
-  if (useYtDlp) {
+  if (preferYtDlp) {
     try {
       const result = await searchYoutubeWithYtDlp(player, query, requester);
       if (result.tracks.length) {
