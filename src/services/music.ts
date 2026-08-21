@@ -123,6 +123,7 @@ export const musicFilterChoices: Array<{ name: string; value: MusicFilterPreset 
 const musicSearchSessions = new Map<string, MusicSearchSession>();
 const queuePageSize = 8;
 const maxPlaybackRecoveryAttempts = 2;
+const musicIdleDisconnectMs = 5 * 60_000;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink and wait until /v4/info responds. The bot will attach automatically when the node is healthy.";
@@ -196,7 +197,7 @@ export function initMusic(client: Client<true>) {
             console.error(`[music:autoplay-error] guild=${player.guildId}`, error);
           }
         },
-        destroyAfterMs: 60_000
+        destroyAfterMs: musicIdleDisconnectMs
       }
     },
     queueOptions: {
@@ -285,6 +286,9 @@ export function initMusic(client: Client<true>) {
           embeds: [nowPlayingEmbed(player, track)],
           components: musicControlRows(player)
         };
+
+    const pendingPanel = player.getData<Promise<void>>("musicPanelPending");
+    if (pendingPanel) await pendingPanel;
 
     const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
     if (panelTarget?.channelId === channel.id && "messages" in channel) {
@@ -377,25 +381,30 @@ export async function createOrGetMusicPlayer(context: MusicRequestContext) {
     throw new Error(lavalinkUnavailableMessage);
   }
 
-  const member = context.guild.members.cache.get(context.user.id)
-    ?? await context.guild.members.fetch(context.user.id);
+  const existingPlayer = manager.getPlayer(context.guildId);
+  const cachedMember = context.guild.members.cache.get(context.user.id);
+  const cachedBotMember = context.guild.members.me;
+  const [member, me, config] = await Promise.all([
+    cachedMember ? Promise.resolve(cachedMember) : context.guild.members.fetch(context.user.id),
+    cachedBotMember
+      ? Promise.resolve(cachedBotMember)
+      : context.guild.members.fetchMe().catch(() => null),
+    existingPlayer
+      ? Promise.resolve(null)
+      : getGuildConfig(context.guildId).catch((error) => {
+          console.error(`[music:config-error] guild=${context.guildId}`, error);
+          return null;
+        })
+  ]);
   const voiceChannelId = member.voice.channelId;
   if (!voiceChannelId) {
     throw new Error("Join a voice channel first.");
   }
 
-  const me = context.guild.members.me ?? await context.guild.members.fetchMe().catch(() => null);
   if (me?.voice.channelId && me.voice.channelId !== voiceChannelId) {
     throw new Error("I am already playing in another voice channel.");
   }
 
-  const existingPlayer = manager.getPlayer(context.guildId);
-  const config = existingPlayer
-    ? null
-    : await getGuildConfig(context.guildId).catch((error) => {
-        console.error(`[music:config-error] guild=${context.guildId}`, error);
-        return null;
-      });
   const defaultVolume = Math.max(1, Math.min(100, config?.musicDefaultVolume ?? env.musicDefaultVolume));
 
   const player = manager.createPlayer({
@@ -455,6 +464,7 @@ async function playInput(
 ) {
   const startedAt = performance.now();
   const { player, shouldConnect } = await createOrGetMusicPlayer(context);
+  const setupMs = performance.now() - startedAt;
   cancelSpotifyQueueWarmup(player);
   const spotifyInput = parseSpotifyInput(query);
   const allowYtDlpFallback = env.musicYtDlpEnabled && isYoutubeUrl(query);
@@ -465,6 +475,7 @@ async function playInput(
   const searchStartedAt = performance.now();
   let searchMs = 0;
   let connectMs = 0;
+  let panelMs = 0;
 
   const searchPromise = (spotifyInput
     ? resolveSpotifyPlayback(player, spotifyInput, context.user)
@@ -505,16 +516,32 @@ async function playInput(
   if (startsPlayback) {
     const first = tracks[0];
     if (!first) throw new Error("No playable tracks were resolved.");
-    player.setData("musicPanelTarget", await createLoadingPanel(player, first));
+
+    const panelStartedAt = performance.now();
+    const panelPromise = createLoadingPanel(player, first)
+      .then((target) => {
+        player.setData("musicPanelTarget", target);
+      })
+      .catch((error: unknown) => {
+        console.error(`[music:panel-error] guild=${context.guildId}`, error);
+      })
+      .finally(() => {
+        panelMs = performance.now() - panelStartedAt;
+      });
+
+    player.setData("musicPanelPending", panelPromise);
     player.setData("musicRequestStartedAt", startedAt);
-    await player.play().catch((error: unknown) => {
-      explainLavalinkError(error);
-    });
+    const [playResult] = await Promise.allSettled([player.play(), panelPromise]);
+    if (player.getData<Promise<void>>("musicPanelPending") === panelPromise) {
+      player.deleteData("musicPanelPending");
+    }
+    if (playResult.status === "rejected") explainLavalinkError(playResult.reason);
   }
 
   console.info(
     `[music:play] guild=${context.guildId} node=${player.node.id} source=${resolved.sourceLabel} `
-    + `connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
+    + `setup=${Math.round(setupMs)}ms connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms `
+    + `panel=${Math.round(panelMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
   );
 
   return {
