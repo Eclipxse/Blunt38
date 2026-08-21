@@ -271,7 +271,7 @@ Start Lavalink before the bot:
 java -Xms256M -Xmx1G -jar Lavalink.jar
 ```
 
-When `MUSIC_YTDLP_ENABLED=true`, exact YouTube links are resolved by yt-dlp first, while ordinary `/music play` song-name searches use Lavalink's faster search path. If a YouTube track stalls, the bot automatically retries that exact track through yt-dlp direct audio before trying another source. Signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` (and never past their provider expiry), so recovered and repeated tracks remain quick without slowing every first-time search.
+YouTube links and ordinary `/music play` song-name searches use Lavalink's fast path first. When `MUSIC_YTDLP_ENABLED=true`, a link that cannot be loaded or a YouTube track that stalls automatically retries through yt-dlp direct audio before another source. Signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` (and never past their provider expiry), so recovery remains reliable without adding yt-dlp extraction time to every link.
 
 Spotify track and album metadata uses `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`. Spotify's playlist-items API is now limited to playlists owned by or shared with the authorized user. blunt38 uses the official user-authorized API for those playlists and falls back to Spotify's public embed metadata for other public playlists. Add `SPOTIFY_REDIRECT_URI` to the Spotify app dashboard, run `npm run spotify:authorize`, approve the account once, and restart the bot to enable owned, private, and collaborative playlists. The helper writes the refresh token to `.env` without printing it, and blunt38 refreshes access automatically afterward.
 
