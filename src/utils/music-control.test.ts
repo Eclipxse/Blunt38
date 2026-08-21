@@ -10,7 +10,7 @@ import {
 } from "./music-control.js";
 import {
   parseYtDlpPayload,
-  shouldResolveYoutubeInput,
+  shouldPreferYoutubeResolver,
   youtubeAudioCacheExpiry
 } from "../services/youtube-resolver.js";
 import {
@@ -78,11 +78,11 @@ test("music recovery only accepts the requested title and artist", () => {
   );
 });
 
-test("yt-dlp resolver accepts song names and YouTube URLs only", () => {
-  assert.equal(shouldResolveYoutubeInput("Coldplay Yellow"), true);
-  assert.equal(shouldResolveYoutubeInput("https://youtu.be/yKNxeF4KMsY"), true);
-  assert.equal(shouldResolveYoutubeInput("https://music.youtube.com/watch?v=yKNxeF4KMsY"), true);
-  assert.equal(shouldResolveYoutubeInput("https://open.spotify.com/track/example"), false);
+test("yt-dlp primary path is reserved for direct YouTube URLs", () => {
+  assert.equal(shouldPreferYoutubeResolver("Coldplay Yellow"), false);
+  assert.equal(shouldPreferYoutubeResolver("https://youtu.be/yKNxeF4KMsY"), true);
+  assert.equal(shouldPreferYoutubeResolver("https://music.youtube.com/watch?v=yKNxeF4KMsY"), true);
+  assert.equal(shouldPreferYoutubeResolver("https://open.spotify.com/track/example"), false);
 });
 
 test("yt-dlp payload parser preserves exact YouTube metadata", () => {
