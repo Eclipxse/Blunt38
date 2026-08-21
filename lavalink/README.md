@@ -98,9 +98,17 @@ curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
   "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
 ```
 
-The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: ordinary song-name searches use Lavalink's fast path, while direct YouTube links and stalled YouTube tracks use yt-dlp direct audio before another search source is tried.
+The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: ordinary song names and YouTube links use Lavalink's fast path, while failed links and stalled YouTube tracks use yt-dlp direct audio before another search source is tried.
 
-When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp resolves direct YouTube links and recovery attempts; Lavalink continues to handle normal song searches, queueing, filters, seeking, and Discord audio.
+When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp handles recovery attempts; Lavalink continues to handle primary searches, links, queueing, filters, seeking, and Discord audio.
+
+## Fast YouTube Link Playback
+
+The YouTube plugin's `TV` client requires OAuth for playback. Without it, VPS IPs can receive errors such as `All clients failed` or `The page needs to be reloaded`, and the slower yt-dlp recovery path has to take over.
+
+Use a disposable YouTube account, never your primary account: the plugin authors warn that OAuth automation can rate-limit or terminate the account. In `/opt/lavalink/application.yml`, set `plugins.youtube.oauth.enabled` to `true` without adding `refreshToken`, restart Lavalink, and follow the device-link instructions in `journalctl -u lavalink -f`. After authorization, copy the printed refresh token into `plugins.youtube.oauth.refreshToken`, then restart Lavalink once more so the fast authenticated client survives future restarts. Keep the token private.
+
+Modern yt-dlp also requires a supported JavaScript runtime for full YouTube extraction. Deno 2.3 or newer is recommended; Node.js requires version 22 or newer. The official yt-dlp executable already includes the EJS challenge scripts, but yt-dlp and the runtime must both remain current.
 
 ## Spotify Links
 

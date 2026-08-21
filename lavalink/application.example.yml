@@ -52,9 +52,15 @@ plugins:
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
+    # Authenticated TV playback is the lowest-latency option for YouTube links.
+    # Use a burner account: the plugin authors warn that automated playback can
+    # rate-limit or terminate the account. See lavalink/README.md for setup.
+    oauth:
+      enabled: false
+      # refreshToken: "paste the burner account refresh token here"
     clients:
-      # MUSIC handles ytmsearch metadata. TV uses OAuth for playback, while
-      # TVHTML5_SIMPLY provides a non-OAuth fallback with progressive formats.
+      # MUSIC handles ytmsearch metadata. TV becomes the fast playback client
+      # after OAuth is enabled; the remaining clients are unauthenticated fallbacks.
       - MUSIC
       - TV
       - TVHTML5_SIMPLY

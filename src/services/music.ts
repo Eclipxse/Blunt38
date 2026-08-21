@@ -33,8 +33,8 @@ import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
 import {
   getCachedYoutubeAudio,
+  isYoutubeUrl,
   resolveYoutubeAudio,
-  shouldPreferYoutubeResolver,
   type ResolvedYoutubeAudio
 } from "./youtube-resolver.js";
 import {
@@ -457,7 +457,7 @@ async function playInput(
   const { player, shouldConnect } = await createOrGetMusicPlayer(context);
   cancelSpotifyQueueWarmup(player);
   const spotifyInput = parseSpotifyInput(query);
-  const preferYtDlp = env.musicYtDlpEnabled && shouldPreferYoutubeResolver(query);
+  const allowYtDlpFallback = env.musicYtDlpEnabled && isYoutubeUrl(query);
   const searchQuery = isUrl(query)
     ? query
     : { query, source: env.musicSearchSource as SearchPlatform };
@@ -468,7 +468,7 @@ async function playInput(
 
   const searchPromise = (spotifyInput
     ? resolveSpotifyPlayback(player, spotifyInput, context.user)
-    : resolveStandardPlayback(player, query, context.user, preferYtDlp, searchQuery))
+    : resolveStandardPlayback(player, query, context.user, allowYtDlpFallback, searchQuery))
     .then((result) => {
       searchMs = performance.now() - searchStartedAt;
       return result;
@@ -553,29 +553,10 @@ async function resolveStandardPlayback(
   player: Player,
   query: string,
   requester: User,
-  preferYtDlp: boolean,
+  allowYtDlpFallback: boolean,
   searchQuery: string | { query: string; source: SearchPlatform }
 ): Promise<MusicPlayResult> {
   let lastError: unknown;
-
-  if (preferYtDlp) {
-    try {
-      const result = await searchYoutubeWithYtDlp(player, query, requester);
-      if (result.tracks.length) {
-        return {
-          result,
-          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
-          sourceLabel: "yt-dlp"
-        };
-      }
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `[music:ytdlp-primary-failed] query=${JSON.stringify(query)}; trying Lavalink sources`,
-        error instanceof Error ? error.message : error
-      );
-    }
-  }
 
   const searches = typeof searchQuery === "string"
     ? [{ input: searchQuery, sourceLabel: "url" }]
@@ -597,6 +578,25 @@ async function resolveStandardPlayback(
       lastError = error;
       console.warn(
         `[music:source-search-failed] source=${search.sourceLabel} query=${JSON.stringify(query)}`,
+        error instanceof Error ? error.message : error
+      );
+    }
+  }
+
+  if (allowYtDlpFallback) {
+    try {
+      const result = await searchYoutubeWithYtDlp(player, query, requester);
+      if (result.tracks.length) {
+        return {
+          result,
+          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+          sourceLabel: "yt-dlp fallback"
+        };
+      }
+    } catch (error) {
+      lastError = error;
+      console.warn(
+        `[music:ytdlp-url-fallback-failed] query=${JSON.stringify(query)}`,
         error instanceof Error ? error.message : error
       );
     }
