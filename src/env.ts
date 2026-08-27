@@ -23,6 +23,10 @@ const musicDefaultVolume = Number.parseInt(process.env.MUSIC_DEFAULT_VOLUME ?? "
 const musicYtDlpTimeoutMs = Number.parseInt(process.env.MUSIC_YTDLP_TIMEOUT_MS ?? "25000", 10);
 const musicYtDlpCacheTtlMs = Number.parseInt(process.env.MUSIC_YTDLP_CACHE_TTL_MS ?? "7200000", 10);
 const musicResolveConcurrency = Number.parseInt(process.env.MUSIC_RESOLVE_CONCURRENCY ?? "3", 10);
+const musicFastSearchTimeoutMs = Number.parseInt(process.env.MUSIC_FAST_SEARCH_TIMEOUT_MS ?? "1500", 10);
+const musicSearchRecoveryTimeoutMs = Number.parseInt(process.env.MUSIC_SEARCH_RECOVERY_TIMEOUT_MS ?? "4500", 10);
+const musicSearchCacheTtlMs = Number.parseInt(process.env.MUSIC_SEARCH_CACHE_TTL_MS ?? "1800000", 10);
+const musicSearchCacheMax = Number.parseInt(process.env.MUSIC_SEARCH_CACHE_MAX ?? "500", 10);
 const spotifyCacheTtlMs = Number.parseInt(process.env.SPOTIFY_CACHE_TTL_MS ?? "3600000", 10);
 const storageDriverRaw = process.env.STORAGE_DRIVER?.trim().toLowerCase();
 const voiceControlUserIds = (process.env.VOICE_CONTROL_USER_IDS ?? "")
@@ -68,6 +72,18 @@ export const env = {
   musicResolveConcurrency: Number.isFinite(musicResolveConcurrency)
     ? Math.max(1, Math.min(8, musicResolveConcurrency))
     : 3,
+  musicFastSearchTimeoutMs: Number.isFinite(musicFastSearchTimeoutMs)
+    ? Math.max(500, Math.min(5000, musicFastSearchTimeoutMs))
+    : 1500,
+  musicSearchRecoveryTimeoutMs: Number.isFinite(musicSearchRecoveryTimeoutMs)
+    ? Math.max(1000, Math.min(15000, musicSearchRecoveryTimeoutMs))
+    : 4500,
+  musicSearchCacheTtlMs: Number.isFinite(musicSearchCacheTtlMs)
+    ? Math.max(60000, Math.min(43200000, musicSearchCacheTtlMs))
+    : 1800000,
+  musicSearchCacheMax: Number.isFinite(musicSearchCacheMax)
+    ? Math.max(10, Math.min(5000, musicSearchCacheMax))
+    : 500,
   spotifyClientId: process.env.SPOTIFY_CLIENT_ID?.trim(),
   spotifyClientSecret: process.env.SPOTIFY_CLIENT_SECRET?.trim(),
   spotifyRefreshToken: process.env.SPOTIFY_REFRESH_TOKEN?.trim(),
