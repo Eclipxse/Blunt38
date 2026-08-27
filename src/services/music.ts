@@ -28,6 +28,15 @@ import {
   isConfidentMusicMatch,
   musicPageCount
 } from "../utils/music-control.js";
+import {
+  cloneCachedMusicSearchResult,
+  firstAcceptableMusicResult,
+  MusicSearchDeadlineError,
+  TtlLruCache,
+  withinMusicSearchDeadline,
+  type MusicSearchCandidate,
+  type MusicSearchWinner
+} from "../utils/fast-music-search.js";
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
@@ -35,6 +44,7 @@ import {
   getCachedYoutubeAudio,
   isYoutubeUrl,
   resolveYoutubeAudio,
+  youtubeVideoId,
   type ResolvedYoutubeAudio
 } from "./youtube-resolver.js";
 import {
@@ -88,6 +98,11 @@ type MusicPlayResult = {
   sourceLabel: string;
 };
 
+type CachedStandardPlayback = {
+  result: MusicSearchResult;
+  sourceLabel: string;
+};
+
 type MusicSearchSession = {
   guildId: string;
   userId: string;
@@ -124,6 +139,7 @@ const musicSearchSessions = new Map<string, MusicSearchSession>();
 const queuePageSize = 8;
 const maxPlaybackRecoveryAttempts = 2;
 const musicIdleDisconnectMs = 5 * 60_000;
+const standardPlaybackCache = new TtlLruCache<CachedStandardPlayback>(env.musicSearchCacheMax);
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink and wait until /v4/info responds. The bot will attach automatically when the node is healthy.";
@@ -486,8 +502,8 @@ async function playInput(
     })
     .catch((error: unknown) => {
       console.error(
-        `[music:search-error] guild=${context.guildId} node=${player.node.id} after=${Math.round(performance.now() - searchStartedAt)}ms`,
-        error
+        `[music:search-error] guild=${context.guildId} node=${player.node.id} `
+        + `after=${Math.round(performance.now() - searchStartedAt)}ms error=${safeMusicErrorMessage(error)}`
       );
       explainLavalinkError(error);
     });
@@ -583,64 +599,177 @@ async function resolveStandardPlayback(
   allowYtDlpFallback: boolean,
   searchQuery: string | { query: string; source: SearchPlatform }
 ): Promise<MusicPlayResult> {
-  let lastError: unknown;
+  const startedAt = performance.now();
+  const cacheKey = standardPlaybackCacheKey(query);
+  const cached = cacheKey ? standardPlaybackCache.get(cacheKey) : undefined;
 
-  const searches = typeof searchQuery === "string"
-    ? [{ input: searchQuery, sourceLabel: "url" }]
-    : standardSearchSources().map((source) => ({
-        input: { query, source },
-        sourceLabel: musicSourceLabel(source)
-      }));
-
-  for (const search of searches) {
-    try {
-      const result = await player.search(search.input, requester);
-      if (!result.tracks.length) continue;
-      return {
-        result,
-        added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
-        sourceLabel: search.sourceLabel
-      };
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `[music:source-search-failed] source=${search.sourceLabel} query=${JSON.stringify(query)}`,
-        error instanceof Error ? error.message : error
-      );
-    }
+  if (cached) {
+    const result = cloneCachedMusicSearchResult(cached.result, requester);
+    console.info(`[music:search] cache=hit winner=${cached.sourceLabel} elapsed=${Math.round(performance.now() - startedAt)}ms`);
+    return musicPlayResult(result, `cache/${cached.sourceLabel}`);
   }
 
-  if (allowYtDlpFallback) {
-    try {
-      const result = await searchYoutubeWithYtDlp(player, query, requester);
-      if (result.tracks.length) {
-        return {
-          result,
-          added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
-          sourceLabel: "yt-dlp fallback"
-        };
-      }
-    } catch (error) {
-      lastError = error;
-      console.warn(
-        `[music:ytdlp-url-fallback-failed] query=${JSON.stringify(query)}`,
-        error instanceof Error ? error.message : error
-      );
-    }
+  const winner = typeof searchQuery === "string"
+    ? await resolveDirectUrlPlayback(player, query, requester, allowYtDlpFallback)
+    : await resolveTextPlayback(player, query, requester);
+  const result = winner.value;
+
+  if (cacheKey && result.loadType !== "playlist" && winner.sourceLabel !== "yt-dlp fallback") {
+    standardPlaybackCache.set(cacheKey, {
+      result: cloneCachedMusicSearchResult(result),
+      sourceLabel: winner.sourceLabel
+    }, env.musicSearchCacheTtlMs);
   }
 
-  throw lastError instanceof Error ? lastError : new Error("No tracks found from the available music sources.");
+  console.info(
+    `[music:search] cache=${cacheKey ? "miss" : "bypass"} winner=${winner.sourceLabel} `
+    + `elapsed=${Math.round(performance.now() - startedAt)}ms`
+  );
+  return musicPlayResult(result, winner.sourceLabel);
 }
 
-function standardSearchSources(): SearchPlatform[] {
+async function resolveTextPlayback(player: Player, query: string, requester: User) {
+  const primaryRace = firstAcceptableMusicResult(
+    primaryYoutubeSearchSources().map((source) => musicSearchCandidate(
+      player,
+      { query, source },
+      requester,
+      musicSourceLabel(source)
+    )),
+    hasMusicTracks
+  );
+
+  try {
+    return await withinMusicSearchDeadline(primaryRace, env.musicFastSearchTimeoutMs);
+  } catch (error) {
+    console.warn(
+      `[music:search-recovery] primary=${primaryYoutubeSearchSources().map(musicSourceLabel).join("+")} `
+      + `reason=${musicSearchFailureReason(error)}`
+    );
+  }
+
+  const soundCloudRace = firstAcceptableMusicResult([
+    musicSearchCandidate(
+      player,
+      { query, source: "scsearch" as SearchPlatform },
+      requester,
+      "SoundCloud"
+    )
+  ], hasMusicTracks);
+
+  return withinMusicSearchDeadline(
+    Promise.any([primaryRace, soundCloudRace]),
+    env.musicSearchRecoveryTimeoutMs
+  );
+}
+
+async function resolveDirectUrlPlayback(
+  player: Player,
+  query: string,
+  requester: User,
+  allowYtDlpFallback: boolean
+) {
+  const expectedYoutubeId = isSingleYoutubeVideoUrl(query) ? youtubeVideoId(query) : null;
+  const directCandidates = [musicSearchCandidate(player, query, requester, "url")];
+  if (expectedYoutubeId) {
+    directCandidates.push(musicSearchCandidate(
+      player,
+      { query: expectedYoutubeId, source: "link" as SearchPlatform },
+      requester,
+      "YouTube ID"
+    ));
+  }
+
+  const directRace = firstAcceptableMusicResult(directCandidates, (result) => hasMusicTracks(result)
+    && (!expectedYoutubeId || result.tracks.some((track) => track.info.identifier === expectedYoutubeId)));
+
+  try {
+    return await withinMusicSearchDeadline(directRace, env.musicFastSearchTimeoutMs);
+  } catch (error) {
+    console.warn(`[music:direct-recovery] reason=${musicSearchFailureReason(error)} ytDlp=${allowYtDlpFallback ? "enabled" : "disabled"}`);
+  }
+
+  const recoveryCandidates: Promise<MusicSearchWinner<MusicSearchResult>>[] = [directRace];
+  if (allowYtDlpFallback) {
+    recoveryCandidates.push(firstAcceptableMusicResult([{
+      sourceLabel: "yt-dlp fallback",
+      run: () => searchYoutubeWithYtDlp(player, query, requester)
+    }], hasMusicTracks));
+  }
+
+  return withinMusicSearchDeadline(
+    Promise.any(recoveryCandidates),
+    env.musicSearchRecoveryTimeoutMs
+  );
+}
+
+function musicSearchCandidate(
+  player: Player,
+  input: string | { query: string; source: SearchPlatform },
+  requester: User,
+  sourceLabel: string
+): MusicSearchCandidate<MusicSearchResult> {
+  return {
+    sourceLabel,
+    run: async () => {
+      try {
+        return await player.search(input, requester);
+      } catch (error) {
+        console.warn(`[music:source-search-failed] source=${sourceLabel} error=${safeMusicErrorMessage(error)}`);
+        throw error;
+      }
+    }
+  };
+}
+
+function primaryYoutubeSearchSources(): SearchPlatform[] {
   const configured = env.musicSearchSource as SearchPlatform;
   const configuredName = configured.toString();
   const sources: SearchPlatform[] = configuredName.startsWith("ytm")
-    ? [configured, "ytsearch", "scsearch"]
+    ? [configured, "ytsearch"]
     : configuredName.startsWith("yt")
-      ? [configured, "ytmsearch", "scsearch"]
-      : [configured, "ytmsearch", "ytsearch", "scsearch"];
+      ? [configured, "ytmsearch"]
+      : ["ytsearch", "ytmsearch"];
   return [...new Set(sources)];
+}
+
+function musicPlayResult(result: MusicSearchResult, sourceLabel: string): MusicPlayResult {
+  return {
+    result,
+    added: result.loadType === "playlist" ? result.tracks : [result.tracks[0]!],
+    sourceLabel
+  };
+}
+
+function hasMusicTracks(result: MusicSearchResult) {
+  return result.tracks.length > 0;
+}
+
+function standardPlaybackCacheKey(query: string) {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  if (!isUrl(trimmed)) return `query:${trimmed.replace(/\s+/g, " ").toLowerCase()}`;
+  if (!isSingleYoutubeVideoUrl(trimmed)) return null;
+  const videoId = youtubeVideoId(trimmed);
+  return videoId ? `youtube:${videoId}` : null;
+}
+
+function isSingleYoutubeVideoUrl(query: string) {
+  if (!isYoutubeUrl(query)) return false;
+  try {
+    return !new URL(query).searchParams.has("list");
+  } catch {
+    return false;
+  }
+}
+
+function musicSearchFailureReason(error: unknown) {
+  return error instanceof MusicSearchDeadlineError ? `deadline-${error.timeoutMs}ms` : "sources-unavailable";
+}
+
+function safeMusicErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return JSON.stringify(message.replace(/https?:\/\/\S+/gi, "[redacted-url]").slice(0, 300));
 }
 
 export function cancelSpotifyQueueWarmup(player: Player) {

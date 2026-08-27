@@ -207,7 +207,7 @@ function youtubeCacheKey(value: string) {
   return `query:${trimmed.replace(/\s+/g, " ").toLowerCase()}`;
 }
 
-function youtubeVideoId(value: string) {
+export function youtubeVideoId(value: string) {
   try {
     const parsed = new URL(value);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");

@@ -11,6 +11,7 @@ import {
 import {
   isYoutubeUrl,
   parseYtDlpPayload,
+  youtubeVideoId,
   youtubeAudioCacheExpiry
 } from "../services/youtube-resolver.js";
 import {
@@ -19,6 +20,105 @@ import {
   resetSpotifyResolverCaches,
   resolveSpotifyInput
 } from "../services/spotify-resolver.js";
+import {
+  cloneCachedMusicSearchResult,
+  firstAcceptableMusicResult,
+  MusicSearchDeadlineError,
+  TtlLruCache,
+  withinMusicSearchDeadline
+} from "./fast-music-search.js";
+
+test("fast music search returns the first acceptable source", async () => {
+  const winner = await firstAcceptableMusicResult([
+    {
+      sourceLabel: "slow",
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        return ["slow result"];
+      }
+    },
+    {
+      sourceLabel: "fast",
+      run: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 3));
+        return ["fast result"];
+      }
+    }
+  ], (tracks) => tracks.length > 0);
+
+  assert.equal(winner.sourceLabel, "fast");
+  assert.deepEqual(winner.value, ["fast result"]);
+});
+
+test("fast music search ignores rejected and empty sources", async () => {
+  const winner = await firstAcceptableMusicResult([
+    { sourceLabel: "broken", run: async () => Promise.reject(new Error("broken")) },
+    { sourceLabel: "empty", run: async () => [] as string[] },
+    { sourceLabel: "usable", run: async () => ["track"] }
+  ], (tracks) => tracks.length > 0);
+
+  assert.equal(winner.sourceLabel, "usable");
+});
+
+test("music search deadlines reject stalled work", async () => {
+  const never = new Promise<string>(() => undefined);
+  const startedAt = performance.now();
+
+  await assert.rejects(
+    () => withinMusicSearchDeadline(never, 20),
+    (error) => error instanceof MusicSearchDeadlineError && error.timeoutMs === 20
+  );
+  assert.ok(performance.now() - startedAt < 250);
+});
+
+test("music search cache expires and evicts least-recently-used entries", () => {
+  const cache = new TtlLruCache<{ requester: string }>(2);
+  cache.set("one", { requester: "first" }, 100, 1_000);
+  cache.set("two", { requester: "second" }, 100, 1_000);
+  assert.equal(cache.get("one", 1_010)?.requester, "first");
+
+  cache.set("three", { requester: "third" }, 100, 1_010);
+  assert.equal(cache.get("two", 1_020), undefined);
+  assert.equal(cache.get("one", 1_101), undefined);
+  assert.equal(cache.get("three", 1_020)?.requester, "third");
+});
+
+test("cached Lavalink tracks are cloned for the current requester", () => {
+  const originalRequester = { id: "old-user" };
+  const currentRequester = { id: "current-user" };
+  const result = {
+    loadType: "search" as const,
+    exception: null,
+    pluginInfo: {},
+    playlist: null,
+    tracks: [{
+      encoded: "encoded",
+      info: {
+        identifier: "video-id",
+        title: "Track",
+        author: "Artist",
+        duration: 120_000,
+        artworkUrl: null,
+        uri: "https://www.youtube.com/watch?v=video-id",
+        sourceName: "youtube" as const,
+        isSeekable: true,
+        isStream: false,
+        isrc: null
+      },
+      pluginInfo: {},
+      requester: originalRequester,
+      userData: { marker: "cached" }
+    }]
+  };
+
+  const requesterFree = cloneCachedMusicSearchResult(result);
+  const restored = cloneCachedMusicSearchResult(requesterFree, currentRequester);
+
+  assert.equal(requesterFree.tracks[0]?.requester, undefined);
+  assert.equal((restored.tracks[0]?.requester as { id: string }).id, "current-user");
+  assert.equal((result.tracks[0]?.requester as { id: string }).id, "old-user");
+  assert.notEqual(restored.tracks[0]?.info, result.tracks[0]?.info);
+});
 
 test("parseSeekPosition accepts seconds and timestamps", () => {
   assert.equal(parseSeekPosition("90"), 90_000);
@@ -84,6 +184,13 @@ test("YouTube URL detection accepts direct and privacy-enhanced links only", () 
   assert.equal(isYoutubeUrl("https://music.youtube.com/watch?v=yKNxeF4KMsY"), true);
   assert.equal(isYoutubeUrl("https://www.youtube-nocookie.com/embed/yKNxeF4KMsY"), true);
   assert.equal(isYoutubeUrl("https://open.spotify.com/track/example"), false);
+});
+
+test("YouTube video IDs are extracted for exact direct-link races", () => {
+  assert.equal(youtubeVideoId("https://youtu.be/yKNxeF4KMsY?t=30"), "yKNxeF4KMsY");
+  assert.equal(youtubeVideoId("https://www.youtube.com/watch?v=yKNxeF4KMsY"), "yKNxeF4KMsY");
+  assert.equal(youtubeVideoId("https://www.youtube.com/shorts/yKNxeF4KMsY"), "yKNxeF4KMsY");
+  assert.equal(youtubeVideoId("Coldplay Yellow"), null);
 });
 
 test("yt-dlp payload parser preserves exact YouTube metadata", () => {
