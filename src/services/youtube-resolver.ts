@@ -35,6 +35,7 @@ export type ResolvedYoutubeAudio = {
   artworkUrl: string | null;
   streamUrl: string;
   isLive: boolean;
+  expiresAt?: number;
 };
 
 export function isYoutubeUrl(query: string) {
@@ -155,8 +156,9 @@ export async function resolveYoutubeAudio(input: {
 
   const resolution = Promise.resolve().then(async () => {
     const output = await runYtDlp(input.executable, args, input.timeoutMs);
-    const resolved = parseYtDlpPayload(output, input.query);
-    const expiresAt = youtubeAudioCacheExpiry(resolved.streamUrl, Date.now(), input.cacheTtlMs);
+    const parsed = parseYtDlpPayload(output, input.query);
+    const expiresAt = youtubeAudioCacheExpiry(parsed.streamUrl, Date.now(), input.cacheTtlMs);
+    const resolved = { ...parsed, expiresAt };
     const cacheKeys = uniqueCacheKeys(
       input.query,
       target,

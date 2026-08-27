@@ -31,6 +31,8 @@ import {
 import {
   cloneCachedMusicSearchResult,
   firstAcceptableMusicResult,
+  firstSuccessfulMusicPromise,
+  musicSearchResultCacheTtl,
   MusicSearchDeadlineError,
   TtlLruCache,
   withinMusicSearchDeadline,
@@ -614,11 +616,16 @@ async function resolveStandardPlayback(
     : await resolveTextPlayback(player, query, requester);
   const result = winner.value;
 
-  if (cacheKey && result.loadType !== "playlist" && winner.sourceLabel !== "yt-dlp fallback") {
+  const cacheTtlMs = musicSearchResultCacheTtl(
+    winner.sourceLabel,
+    result.tracks[0]?.userData?.blunt38StreamExpiresAt,
+    env.musicSearchCacheTtlMs
+  );
+  if (cacheKey && result.loadType !== "playlist" && cacheTtlMs > 0) {
     standardPlaybackCache.set(cacheKey, {
       result: cloneCachedMusicSearchResult(result),
       sourceLabel: winner.sourceLabel
-    }, env.musicSearchCacheTtlMs);
+    }, cacheTtlMs);
   }
 
   console.info(
@@ -658,7 +665,7 @@ async function resolveTextPlayback(player: Player, query: string, requester: Use
   ], hasMusicTracks);
 
   return withinMusicSearchDeadline(
-    Promise.any([primaryRace, soundCloudRace]),
+    firstSuccessfulMusicPromise([primaryRace, soundCloudRace]),
     env.musicSearchRecoveryTimeoutMs
   );
 }
@@ -669,7 +676,7 @@ async function resolveDirectUrlPlayback(
   requester: User,
   allowYtDlpFallback: boolean
 ) {
-  const expectedYoutubeId = isSingleYoutubeVideoUrl(query) ? youtubeVideoId(query) : null;
+  const expectedYoutubeId = isYoutubeUrl(query) ? youtubeVideoId(query) : null;
   const directCandidates = [musicSearchCandidate(player, query, requester, "url")];
   if (expectedYoutubeId) {
     directCandidates.push(musicSearchCandidate(
@@ -684,7 +691,8 @@ async function resolveDirectUrlPlayback(
     && (!expectedYoutubeId || result.tracks.some((track) => track.info.identifier === expectedYoutubeId)));
 
   try {
-    return await withinMusicSearchDeadline(directRace, env.musicFastSearchTimeoutMs);
+    const winner = await withinMusicSearchDeadline(directRace, env.musicFastSearchTimeoutMs);
+    return preferExactYoutubeTrack(winner, expectedYoutubeId);
   } catch (error) {
     console.warn(`[music:direct-recovery] reason=${musicSearchFailureReason(error)} ytDlp=${allowYtDlpFallback ? "enabled" : "disabled"}`);
   }
@@ -697,10 +705,11 @@ async function resolveDirectUrlPlayback(
     }], hasMusicTracks));
   }
 
-  return withinMusicSearchDeadline(
-    Promise.any(recoveryCandidates),
+  const winner = await withinMusicSearchDeadline(
+    firstSuccessfulMusicPromise(recoveryCandidates),
     env.musicSearchRecoveryTimeoutMs
   );
+  return preferExactYoutubeTrack(winner, expectedYoutubeId);
 }
 
 function musicSearchCandidate(
@@ -749,18 +758,31 @@ function standardPlaybackCacheKey(query: string) {
   const trimmed = query.trim();
   if (!trimmed) return null;
   if (!isUrl(trimmed)) return `query:${trimmed.replace(/\s+/g, " ").toLowerCase()}`;
-  if (!isSingleYoutubeVideoUrl(trimmed)) return null;
+  if (!isYoutubeUrl(trimmed)) return null;
   const videoId = youtubeVideoId(trimmed);
   return videoId ? `youtube:${videoId}` : null;
 }
 
-function isSingleYoutubeVideoUrl(query: string) {
-  if (!isYoutubeUrl(query)) return false;
-  try {
-    return !new URL(query).searchParams.has("list");
-  } catch {
-    return false;
-  }
+function preferExactYoutubeTrack(
+  winner: MusicSearchWinner<MusicSearchResult>,
+  expectedYoutubeId: string | null
+): MusicSearchWinner<MusicSearchResult> {
+  if (!expectedYoutubeId) return winner;
+  const exactTrack = winner.value.tracks.find((track) => {
+    return track.info.identifier === expectedYoutubeId
+      || track.userData?.blunt38YoutubeId === expectedYoutubeId;
+  });
+  if (!exactTrack) return winner;
+
+  return {
+    ...winner,
+    value: {
+      ...winner.value,
+      loadType: "track",
+      playlist: null,
+      tracks: [exactTrack]
+    } as MusicSearchResult
+  };
 }
 
 function musicSearchFailureReason(error: unknown) {
@@ -1560,7 +1582,8 @@ async function searchYoutubeWithYtDlp(player: Player, query: string, requester: 
     blunt38DurationMs: resolved.durationMs,
     blunt38WebpageUrl: resolved.webpageUrl,
     blunt38ArtworkUrl: resolved.artworkUrl,
-    blunt38IsLive: resolved.isLive ? "true" : "false"
+    blunt38IsLive: resolved.isLive ? "true" : "false",
+    blunt38StreamExpiresAt: resolved.expiresAt ?? 0
   };
   applyResolvedYoutubeInfo(track, resolved);
   return result;

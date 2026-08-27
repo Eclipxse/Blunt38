@@ -1,3 +1,7 @@
+import type { SearchResult, TrackRequester, UnresolvedSearchResult } from "lavalink-client";
+
+export type CacheableMusicSearchResult = SearchResult | UnresolvedSearchResult;
+
 export type MusicSearchCandidate<T> = {
   sourceLabel: string;
   run: () => Promise<T>;
@@ -21,11 +25,38 @@ export function firstAcceptableMusicResult<T>(
 ): Promise<MusicSearchWinner<T>> {
   if (!candidates.length) return Promise.reject(new Error("No music search candidates were provided."));
 
-  return Promise.any(candidates.map(async (candidate) => {
+  return firstSuccessfulMusicPromise(candidates.map(async (candidate) => {
     const value = await candidate.run();
     if (!accepts(value)) throw new Error(`${candidate.sourceLabel} returned no acceptable tracks.`);
     return { sourceLabel: candidate.sourceLabel, value };
   }));
+}
+
+export async function firstSuccessfulMusicPromise<T>(promises: readonly Promise<T>[]): Promise<T> {
+  if (!promises.length) throw new Error("No music search promises were provided.");
+
+  try {
+    return await Promise.any(promises);
+  } catch (error) {
+    throw mostUsefulMusicSearchError(error);
+  }
+}
+
+export function mostUsefulMusicSearchError(error: unknown): Error {
+  const errors = flattenMusicSearchErrors(error);
+
+  for (let index = errors.length - 1; index >= 0; index -= 1) {
+    const candidate = errors[index]!;
+    if (!/^All promises were rejected$/i.test(candidate.message)) return candidate;
+  }
+
+  return errors.at(-1) ?? new Error("No tracks found from the available music sources.");
+}
+
+function flattenMusicSearchErrors(error: unknown): Error[] {
+  if (error instanceof AggregateError) return error.errors.flatMap(flattenMusicSearchErrors);
+  if (error instanceof Error) return [error];
+  return [new Error(String(error))];
 }
 
 export async function withinMusicSearchDeadline<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -90,6 +121,25 @@ export class TtlLruCache<T> {
   }
 }
 
+export function boundedRecoveryCacheTtl(expiresAt: unknown, configuredTtlMs: number, now = Date.now()) {
+  const numericExpiry = typeof expiresAt === "number" ? expiresAt : Number(expiresAt);
+  if (!Number.isFinite(numericExpiry)) return 0;
+
+  const remainingMs = Math.floor(numericExpiry - now);
+  if (remainingMs <= 0) return 0;
+  return Math.min(Math.max(0, configuredTtlMs), remainingMs);
+}
+
+export function musicSearchResultCacheTtl(
+  sourceLabel: string,
+  streamExpiresAt: unknown,
+  configuredTtlMs: number,
+  now = Date.now()
+) {
+  if (sourceLabel !== "yt-dlp fallback") return Math.max(0, configuredTtlMs);
+  return boundedRecoveryCacheTtl(streamExpiresAt, configuredTtlMs, now);
+}
+
 export function cloneCachedMusicSearchResult(
   result: CacheableMusicSearchResult,
   requester?: TrackRequester
@@ -107,6 +157,3 @@ export function cloneCachedMusicSearchResult(
     }))
   } as CacheableMusicSearchResult;
 }
-import type { SearchResult, TrackRequester, UnresolvedSearchResult } from "lavalink-client";
-
-export type CacheableMusicSearchResult = SearchResult | UnresolvedSearchResult;

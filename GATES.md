@@ -1,33 +1,29 @@
-# Gates: ultra-fast music resolution
+# Gates: repeat YouTube link recovery regression
 
-Scope: Make first-track resolution bounded and cacheable while preserving exact YouTube links, recovery behavior, and current Discord playback semantics.
+Scope: Make a recovered YouTube link replay safely after stop and surface the real source failure instead of `All promises were rejected`.
 
-- [x] G1: Automated tests prove the fastest successful source wins, empty/error sources are ignored, deadlines are bounded, and cached results are reusable without leaking requester state.
+- [x] G1: Automated tests reproduce nested `AggregateError` failures and prove the user receives the most useful underlying source error.
   CHECK: npm test
-  EXPECT: /# pass [1-9][0-9]*/
-  EVIDENCE: npm test completed with 24 tests, 24 passed, 0 failed.
+  EXPECT: /# pass [2-9][0-9]/
+  EVIDENCE: Nested AggregateError regression test passed; full suite reported 26 passed and 0 failed.
 
-- [x] G2: The TypeScript compiler accepts the implementation without emitting files.
+- [x] G2: Automated tests prove recovery results can be cached with a safety-bounded TTL and cloned for the current requester on replay.
+  CHECK: npm test
+  EXPECT: /# fail 0/
+  EVIDENCE: Recovery TTL boundary and requester-safe cache clone tests passed in the 26-test suite.
+
+- [x] G3: Direct-link resolution caches successful yt-dlp recovery only within the resolver's safe audio expiry and never stores a playlist or already-expired stream.
+  EVIDENCE: resolveYoutubeAudio attaches the five-minute-safety expiry; musicSearchResultCacheTtl caps TTL; resolveStandardPlayback requires non-playlist and TTL greater than zero before storing.
+
+- [x] G4: The strict TypeScript check and production build pass.
   CHECK: npm run check
   EXPECT: /discord-premium-bot@0\.1\.0 check/
-  EVIDENCE: > discord-premium-bot@0.1.0 check | > tsc --noEmit
+  EVIDENCE: npm run check exited 0; npm test invoked the production tsc build and exited 0.
 
-- [x] G3: The production bot build completes successfully.
-  CHECK: npm run build
-  EXPECT: /discord-premium-bot@0\.1\.0 build/
-  EVIDENCE: > discord-premium-bot@0.1.0 build | > tsc
+- [x] G5: The regression patch passes the full test suite after implementation.
+  CHECK: npm test
+  EXPECT: /# fail 0/
+  EVIDENCE: npm test reported 26 tests, 26 passed, 0 failed.
 
-- [x] G4: Text queries race only the two primary YouTube sources, use a strict configurable deadline, and fall back to SoundCloud only after the fast path misses.
-  EVIDENCE: resolveTextPlayback starts primaryYoutubeSearchSources concurrently, applies MUSIC_FAST_SEARCH_TIMEOUT_MS, then races the still-running primary promise with SoundCloud.
-
-- [x] G5: Direct YouTube URLs preserve exact-video matching, use bounded Lavalink resolution, and retain the existing yt-dlp recovery fallback.
-  EVIDENCE: resolveDirectUrlPlayback races the URL and raw direct-video ID, accepts only the expected identifier, bounds both phases, and includes searchYoutubeWithYtDlp only in recovery.
-
-- [x] G6: Successful non-playlist results are stored in a bounded TTL/LRU memory cache and returned with the current requester rather than the cached requester.
-  EVIDENCE: TtlLruCache enforces expiry and max size; cloneCachedMusicSearchResult strips the stored requester and the requester-isolation test passes.
-
-- [x] G7: Logs expose cache hit/miss, winning source, and search elapsed time without printing bot tokens, OAuth refresh tokens, or signed stream URLs.
-  EVIDENCE: music:search emits cache, winner, and elapsed fields; safeMusicErrorMessage replaces every HTTP(S) URL with [redacted-url] before logging.
-
-- [x] G8: The final diff has no whitespace errors or credential material, and deployment instructions include a rollback-safe pull/build/restart/health-check sequence.
-  EVIDENCE: git diff --check exited 0; staged secret scan exited 0; final Termius sequence records the previous commit, uses ff-only pull, verifies before restart, and includes a detached-commit rollback.
+- [x] G6: The final diff has no whitespace errors or credential material and includes a safe VPS deploy-and-measure command.
+  EVIDENCE: git diff --cached --check exited 0; STAGED_SECRET_SCAN_OK; final command uses ff-only pull, tests before restart, and redacted timing-log filters.
