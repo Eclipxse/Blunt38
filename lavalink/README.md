@@ -84,6 +84,7 @@ MUSIC_DEFAULT_VOLUME=80
 MUSIC_YTDLP_ENABLED=true
 MUSIC_YTDLP_PATH=/usr/local/bin/yt-dlp
 MUSIC_YTDLP_TIMEOUT_MS=25000
+MUSIC_YTDLP_IP_FAMILY=auto
 ```
 
 The `LAVALINK_PASSWORD` must match `lavalink.server.password` in `application.yml`.
@@ -98,7 +99,7 @@ curl -fsS -H "Authorization: $LAVALINK_PASSWORD" \
   "http://$LAVALINK_HOST:$LAVALINK_PORT/v4/info"
 ```
 
-The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: ordinary song names and YouTube links use Lavalink's fast path, while failed links and stalled YouTube tracks use yt-dlp direct audio before another search source is tried.
+The bot retries the Lavalink connection continuously. Once this endpoint responds, music commands recover without another bot restart. Keep `MUSIC_YTDLP_ENABLED=true`: ordinary song names use Lavalink's fast search path, direct YouTube links race Lavalink against yt-dlp, and stalled YouTube tracks reuse the in-flight or cached direct stream before another search source is tried. Leave `MUSIC_YTDLP_IP_FAMILY=auto` unless the host has verified IPv6 egress; use `ipv6` to keep yt-dlp off a blocked IPv4 route.
 
 When YouTube does not expose playable formats to Lavalink on a VPS, install the official yt-dlp executable and enable the resolver above. yt-dlp handles recovery attempts; Lavalink continues to handle primary searches, links, queueing, filters, seeking, and Discord audio.
 

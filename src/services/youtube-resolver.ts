@@ -12,6 +12,8 @@ type CachedYoutubeAudio = {
 const audioCache = new Map<string, CachedYoutubeAudio>();
 const pendingResolutions = new Map<string, Promise<ResolvedYoutubeAudio>>();
 
+export type YoutubeResolverIpFamily = "auto" | "ipv4" | "ipv6";
+
 type YtDlpPayload = {
   id?: unknown;
   title?: unknown;
@@ -124,6 +126,7 @@ export async function resolveYoutubeAudio(input: {
   executable: string;
   timeoutMs: number;
   cacheTtlMs: number;
+  ipFamily?: YoutubeResolverIpFamily;
 }) {
   const target = input.target ?? (isUrl(input.query) ? input.query : `ytsearch1:${input.query}`);
   const lookupKeys = uniqueCacheKeys(input.query, target);
@@ -140,7 +143,7 @@ export async function resolveYoutubeAudio(input: {
 
   const args = [
     "--ignore-config",
-    "--force-ipv4",
+    ...youtubeResolverIpFamilyArgs(input.ipFamily ?? "auto"),
     "--no-playlist",
     "--no-warnings",
     "--no-progress",
@@ -183,6 +186,12 @@ export async function resolveYoutubeAudio(input: {
       if (pendingResolutions.get(key) === resolution) pendingResolutions.delete(key);
     }
   }
+}
+
+export function youtubeResolverIpFamilyArgs(ipFamily: YoutubeResolverIpFamily) {
+  if (ipFamily === "ipv4") return ["--force-ipv4"];
+  if (ipFamily === "ipv6") return ["--force-ipv6"];
+  return [];
 }
 
 function getCachedYoutubeAudioByKey(key: string, now = Date.now()) {

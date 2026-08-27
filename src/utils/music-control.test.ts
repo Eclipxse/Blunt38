@@ -12,7 +12,8 @@ import {
   isYoutubeUrl,
   parseYtDlpPayload,
   youtubeVideoId,
-  youtubeAudioCacheExpiry
+  youtubeAudioCacheExpiry,
+  youtubeResolverIpFamilyArgs
 } from "../services/youtube-resolver.js";
 import {
   mapWithConcurrency,
@@ -229,6 +230,12 @@ test("YouTube video IDs are extracted for exact direct-link races", () => {
   );
   assert.equal(youtubeVideoId("https://www.youtube.com/playlist?list=RDyKNxeF4KMsY"), null);
   assert.equal(youtubeVideoId("Coldplay Yellow"), null);
+});
+
+test("yt-dlp network routing can use the configured IP family", () => {
+  assert.deepEqual(youtubeResolverIpFamilyArgs("auto"), []);
+  assert.deepEqual(youtubeResolverIpFamilyArgs("ipv4"), ["--force-ipv4"]);
+  assert.deepEqual(youtubeResolverIpFamilyArgs("ipv6"), ["--force-ipv6"]);
 });
 
 test("yt-dlp payload parser preserves exact YouTube metadata", () => {

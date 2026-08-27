@@ -689,6 +689,15 @@ async function resolveDirectUrlPlayback(
 
   const directRace = firstAcceptableMusicResult(directCandidates, (result) => hasMusicTracks(result)
     && (!expectedYoutubeId || result.tracks.some((track) => track.info.identifier === expectedYoutubeId)));
+  const ytDlpRace = allowYtDlpFallback
+    ? firstAcceptableMusicResult([{
+      sourceLabel: "yt-dlp fallback",
+      run: () => searchYoutubeWithYtDlp(player, query, requester)
+    }], hasMusicTracks)
+    : null;
+  const directRecoveryRace = ytDlpRace
+    ? firstSuccessfulMusicPromise([directRace, ytDlpRace])
+    : directRace;
 
   try {
     const winner = await withinMusicSearchDeadline(directRace, env.musicFastSearchTimeoutMs);
@@ -697,16 +706,8 @@ async function resolveDirectUrlPlayback(
     console.warn(`[music:direct-recovery] reason=${musicSearchFailureReason(error)} ytDlp=${allowYtDlpFallback ? "enabled" : "disabled"}`);
   }
 
-  const recoveryCandidates: Promise<MusicSearchWinner<MusicSearchResult>>[] = [directRace];
-  if (allowYtDlpFallback) {
-    recoveryCandidates.push(firstAcceptableMusicResult([{
-      sourceLabel: "yt-dlp fallback",
-      run: () => searchYoutubeWithYtDlp(player, query, requester)
-    }], hasMusicTracks));
-  }
-
   const winner = await withinMusicSearchDeadline(
-    firstSuccessfulMusicPromise(recoveryCandidates),
+    directRecoveryRace,
     env.musicSearchRecoveryTimeoutMs
   );
   return preferExactYoutubeTrack(winner, expectedYoutubeId);
@@ -1562,7 +1563,8 @@ async function searchYoutubeWithYtDlp(player: Player, query: string, requester: 
     target,
     executable: env.musicYtDlpPath,
     timeoutMs: env.musicYtDlpTimeoutMs,
-    cacheTtlMs: env.musicYtDlpCacheTtlMs
+    cacheTtlMs: env.musicYtDlpCacheTtlMs,
+    ipFamily: env.musicYtDlpIpFamily
   });
   const resolveMs = performance.now() - resolveStartedAt;
   const result = await player.search(resolved.streamUrl, requester);
