@@ -21,12 +21,45 @@ import {
   resolveSpotifyInput
 } from "../services/spotify-resolver.js";
 import {
+  boundedRecoveryCacheTtl,
   cloneCachedMusicSearchResult,
   firstAcceptableMusicResult,
+  firstSuccessfulMusicPromise,
+  musicSearchResultCacheTtl,
   MusicSearchDeadlineError,
+  mostUsefulMusicSearchError,
   TtlLruCache,
   withinMusicSearchDeadline
 } from "./fast-music-search.js";
+
+test("music search errors expose the underlying recovery failure", async () => {
+  const nestedFailure = new AggregateError([
+    new Error("Lavalink URL load failed"),
+    new AggregateError([
+      new Error("yt-dlp cached stream could not be loaded")
+    ])
+  ]);
+
+  assert.equal(mostUsefulMusicSearchError(nestedFailure).message, "yt-dlp cached stream could not be loaded");
+  await assert.rejects(
+    () => firstSuccessfulMusicPromise([
+      Promise.reject(new Error("YouTube ID failed")),
+      Promise.reject(nestedFailure)
+    ]),
+    /yt-dlp cached stream could not be loaded/
+  );
+});
+
+test("recovery cache TTL never outlives the signed audio stream", () => {
+  const now = 1_800_000_000_000;
+  assert.equal(boundedRecoveryCacheTtl(now + 60_000, 1_800_000, now), 60_000);
+  assert.equal(boundedRecoveryCacheTtl(now + 60 * 60_000, 1_800_000, now), 1_800_000);
+  assert.equal(boundedRecoveryCacheTtl(now - 1, 1_800_000, now), 0);
+  assert.equal(boundedRecoveryCacheTtl(undefined, 1_800_000, now), 0);
+  assert.equal(musicSearchResultCacheTtl("YouTube", undefined, 1_800_000, now), 1_800_000);
+  assert.equal(musicSearchResultCacheTtl("yt-dlp fallback", now + 60_000, 1_800_000, now), 60_000);
+  assert.equal(musicSearchResultCacheTtl("yt-dlp fallback", now - 1, 1_800_000, now), 0);
+});
 
 test("fast music search returns the first acceptable source", async () => {
   const winner = await firstAcceptableMusicResult([
@@ -190,6 +223,11 @@ test("YouTube video IDs are extracted for exact direct-link races", () => {
   assert.equal(youtubeVideoId("https://youtu.be/yKNxeF4KMsY?t=30"), "yKNxeF4KMsY");
   assert.equal(youtubeVideoId("https://www.youtube.com/watch?v=yKNxeF4KMsY"), "yKNxeF4KMsY");
   assert.equal(youtubeVideoId("https://www.youtube.com/shorts/yKNxeF4KMsY"), "yKNxeF4KMsY");
+  assert.equal(
+    youtubeVideoId("https://www.youtube.com/watch?v=yKNxeF4KMsY&list=RDyKNxeF4KMsY"),
+    "yKNxeF4KMsY"
+  );
+  assert.equal(youtubeVideoId("https://www.youtube.com/playlist?list=RDyKNxeF4KMsY"), null);
   assert.equal(youtubeVideoId("Coldplay Yellow"), null);
 });
 
