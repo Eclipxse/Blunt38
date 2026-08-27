@@ -22,6 +22,11 @@ const drawGamePort = Number.parseInt(process.env.DRAW_GAME_PORT ?? "8787", 10);
 const musicDefaultVolume = Number.parseInt(process.env.MUSIC_DEFAULT_VOLUME ?? "80", 10);
 const musicYtDlpTimeoutMs = Number.parseInt(process.env.MUSIC_YTDLP_TIMEOUT_MS ?? "25000", 10);
 const musicYtDlpCacheTtlMs = Number.parseInt(process.env.MUSIC_YTDLP_CACHE_TTL_MS ?? "7200000", 10);
+type MusicYtDlpIpFamily = "auto" | "ipv4" | "ipv6";
+const musicYtDlpIpFamilyRaw = process.env.MUSIC_YTDLP_IP_FAMILY?.trim().toLowerCase();
+const musicYtDlpIpFamily: MusicYtDlpIpFamily = musicYtDlpIpFamilyRaw === "ipv4" || musicYtDlpIpFamilyRaw === "ipv6"
+  ? musicYtDlpIpFamilyRaw
+  : "auto";
 const musicResolveConcurrency = Number.parseInt(process.env.MUSIC_RESOLVE_CONCURRENCY ?? "3", 10);
 const musicFastSearchTimeoutMs = Number.parseInt(process.env.MUSIC_FAST_SEARCH_TIMEOUT_MS ?? "1500", 10);
 const musicSearchRecoveryTimeoutMs = Number.parseInt(process.env.MUSIC_SEARCH_RECOVERY_TIMEOUT_MS ?? "4500", 10);
@@ -69,6 +74,7 @@ export const env = {
   musicYtDlpCacheTtlMs: Number.isFinite(musicYtDlpCacheTtlMs)
     ? Math.max(300000, Math.min(43200000, musicYtDlpCacheTtlMs))
     : 7200000,
+  musicYtDlpIpFamily,
   musicResolveConcurrency: Number.isFinite(musicResolveConcurrency)
     ? Math.max(1, Math.min(8, musicResolveConcurrency))
     : 3,
