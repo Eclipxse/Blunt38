@@ -406,6 +406,27 @@ in `/opt/blunt38/.env`, then restart the bot. YouTube timeouts now fall back to
 other configured sources, and stalled YouTube tracks retry through yt-dlp direct
 audio before the deck reports a final failure.
 
+For a credential-safe music report, play one test track, then run on the VPS:
+
+```bash
+cd /opt/blunt38
+npm run music:diagnostics
+```
+
+This read-only report includes the deployed Git revision, PM2 status, configured
+yt-dlp IP family, stage timings, and classified errors. It prints no raw log
+lines, titles, URLs, or environment values containing credentials. PM2 logs are
+bounded tails and may include old attempts; Lavalink logs cover the last ten
+minutes. Missing permissions or commands are reported as unavailable. Config
+values describe the current file, not proof that the running bot reloaded it.
+
+Direct-video fallback participates immediately in the search race and receives
+its configured yt-dlp timeout budget. Pure playlist links remain with Lavalink.
+Stop, skip, and track changes invalidate stale recovery work; controls acknowledge
+Discord before waiting for permissions or audio-node requests. These changes
+cannot guarantee sub-second playback or bypass a YouTube anti-bot restriction.
+Working IPv6 connectivity alone does not establish that YouTube will serve audio.
+
 ## // opsec, because apparently we need to say it
 
 - Never commit `.env`.

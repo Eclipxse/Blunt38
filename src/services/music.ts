@@ -34,16 +34,19 @@ import {
   firstSuccessfulMusicPromise,
   musicSearchResultCacheTtl,
   MusicSearchDeadlineError,
+  raceMusicSources,
   TtlLruCache,
   withinMusicSearchDeadline,
   type MusicSearchCandidate,
   type MusicSearchWinner
 } from "../utils/fast-music-search.js";
+import { friendlyPlaybackFailure, MusicRecoveryJobs } from "../utils/music-recovery.js";
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
 import {
   getCachedYoutubeAudio,
+  invalidateCachedYoutubeAudio,
   isYoutubeUrl,
   resolveYoutubeAudio,
   youtubeVideoId,
@@ -142,6 +145,7 @@ const queuePageSize = 8;
 const maxPlaybackRecoveryAttempts = 2;
 const musicIdleDisconnectMs = 5 * 60_000;
 const standardPlaybackCache = new TtlLruCache<CachedStandardPlayback>(env.musicSearchCacheMax);
+const recoveryJobs = new MusicRecoveryJobs();
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink and wait until /v4/info responds. The bot will attach automatically when the node is healthy.";
@@ -243,7 +247,15 @@ export function initMusic(client: Client<true>) {
     console.error(`Lavalink node "${node.id}" error:`, error.message);
   });
 
-  manager.on("trackStart", async (player, track) => {
+  manager.on("playerDestroy", (player) => cancelMusicRecovery(player));
+
+  manager.on("trackStart", musicEventHandler("trackStart", async (player, track) => {
+    recoveryJobs.cancel(player);
+    player.deleteData("musicRecoverySuppressed");
+    const revision = randomUUID();
+    player.setData("musicPanelRevision", revision);
+    const isCurrent = () => manager?.getPlayer(player.guildId) === player
+      && player.getData<string>("musicPanelRevision") === revision;
     applyYoutubeResolverMetadata(track);
 
     const lastFailure = player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure");
@@ -292,6 +304,7 @@ export function initMusic(client: Client<true>) {
             return null;
           })
         : null;
+    if (!isCurrent()) return;
     const panelPayload = visual
       ? {
           content: `${trackLabel(track)}\nRequested by **${getRequesterName(track)}**`,
@@ -307,10 +320,12 @@ export function initMusic(client: Client<true>) {
 
     const pendingPanel = player.getData<Promise<void>>("musicPanelPending");
     if (pendingPanel) await pendingPanel;
+    if (!isCurrent()) return;
 
     const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
     if (panelTarget?.channelId === channel.id && "messages" in channel) {
       const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+      if (!isCurrent()) return;
       if (panelMessage) {
         await panelMessage.edit(panelPayload).catch(() => null);
         return;
@@ -319,9 +334,12 @@ export function initMusic(client: Client<true>) {
 
     const sent = await channel.send(panelPayload).catch(() => null);
     if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
-  });
+  }));
 
   manager.on("trackError", (player, track, payload) => {
+    if (track && player.queue.current && musicTrackKey(track) !== musicTrackKey(player.queue.current)) return;
+    player.setData("musicPanelRevision", randomUUID());
+    invalidateFailedStream(track);
     const detail = playbackFailureDetail(payload);
     recordPlaybackFailure(player, track, detail);
     console.error(
@@ -333,6 +351,9 @@ export function initMusic(client: Client<true>) {
   });
 
   manager.on("trackStuck", (player, track, payload) => {
+    if (track && player.queue.current && musicTrackKey(track) !== musicTrackKey(player.queue.current)) return;
+    player.setData("musicPanelRevision", randomUUID());
+    invalidateFailedStream(track);
     const detail = playbackFailureDetail(payload);
     recordPlaybackFailure(player, track, detail);
     console.error(
@@ -343,12 +364,12 @@ export function initMusic(client: Client<true>) {
     });
   });
 
-  manager.on("queueEnd", async (player, track, payload) => {
+  manager.on("queueEnd", musicEventHandler("queueEnd", async (player, track, payload) => {
     const reason = payload.type === "TrackEndEvent" ? payload.reason : undefined;
     const endState = classifyMusicPlaybackEnd(payload.type, reason);
 
     if (endState === "silent") {
-      if (player.getData<boolean>("musicRecoveryInFlight")) return;
+      if (recoveryJobs.has(player)) return;
       clearPlaybackRecovery(player);
       return;
     }
@@ -358,9 +379,12 @@ export function initMusic(client: Client<true>) {
       return;
     }
 
-    clearPlaybackRecovery(player);
-    await updateMusicPanel(client, player, musicEmbed("Queue Finished", "No more tracks in the queue."));
-  });
+    cancelMusicRecovery(player);
+    const revision = player.getData<string>("musicPanelRevision");
+    await updateMusicPanel(client, player, musicEmbed("Queue Finished", "No more tracks in the queue."),
+      () => manager?.getPlayer(player.guildId) === player
+        && player.getData<string>("musicPanelRevision") === revision);
+  }));
 
   void manager
     .init({
@@ -517,6 +541,7 @@ async function playInput(
     : Promise.resolve();
 
   const [resolved] = await Promise.all([searchPromise, connectPromise]);
+  assertMusicPlayerActive(player);
 
   if (!resolved.added.length) {
     throw new Error("No tracks found.");
@@ -549,7 +574,7 @@ async function playInput(
 
     player.setData("musicPanelPending", panelPromise);
     player.setData("musicRequestStartedAt", startedAt);
-    const [playResult] = await Promise.allSettled([player.play(), panelPromise]);
+    const [playResult] = await Promise.allSettled([startMusicPlayback(player), panelPromise]);
     if (player.getData<Promise<void>>("musicPanelPending") === panelPromise) {
       player.deleteData("musicPanelPending");
     }
@@ -577,6 +602,7 @@ async function connectPlayerWithRetry(player: Player, guildId: string | null) {
   let lastError: unknown;
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
+    assertMusicPlayerActive(player);
     try {
       await player.connect();
       return performance.now() - startedAt;
@@ -687,28 +713,24 @@ async function resolveDirectUrlPlayback(
     ));
   }
 
-  const directRace = firstAcceptableMusicResult(directCandidates, (result) => hasMusicTracks(result)
-    && (!expectedYoutubeId || result.tracks.some((track) => track.info.identifier === expectedYoutubeId)));
-  const ytDlpRace = allowYtDlpFallback
-    ? firstAcceptableMusicResult([{
+  // yt-dlp uses --no-playlist. Only race it for an individual video, never
+  // silently replace a playlist URL with its first track.
+  if (allowYtDlpFallback && expectedYoutubeId) {
+    directCandidates.push({
       sourceLabel: "yt-dlp fallback",
       run: () => searchYoutubeWithYtDlp(player, query, requester)
-    }], hasMusicTracks)
-    : null;
-  const directRecoveryRace = ytDlpRace
-    ? firstSuccessfulMusicPromise([directRace, ytDlpRace])
-    : directRace;
-
-  try {
-    const winner = await withinMusicSearchDeadline(directRace, env.musicFastSearchTimeoutMs);
-    return preferExactYoutubeTrack(winner, expectedYoutubeId);
-  } catch (error) {
-    console.warn(`[music:direct-recovery] reason=${musicSearchFailureReason(error)} ytDlp=${allowYtDlpFallback ? "enabled" : "disabled"}`);
+    });
   }
-
-  const winner = await withinMusicSearchDeadline(
-    directRecoveryRace,
-    env.musicSearchRecoveryTimeoutMs
+  const winner = await raceMusicSources(
+    directCandidates,
+    (result) => hasMusicTracks(result) && (!expectedYoutubeId
+      || result.tracks.some((track) => track.info.identifier === expectedYoutubeId
+        || track.userData?.blunt38YoutubeId === expectedYoutubeId)),
+    env.musicFastSearchTimeoutMs,
+    allowYtDlpFallback && expectedYoutubeId
+      ? Math.max(env.musicSearchRecoveryTimeoutMs, env.musicYtDlpTimeoutMs)
+      : env.musicSearchRecoveryTimeoutMs,
+    () => console.warn(`[music:direct-recovery] reason=fast-deadline ytDlp=${allowYtDlpFallback && expectedYoutubeId ? "enabled" : "disabled"}`)
   );
   return preferExactYoutubeTrack(winner, expectedYoutubeId);
 }
@@ -1063,12 +1085,13 @@ export async function queueSearchResult(interaction: StringSelectMenuInteraction
   const startedAt = performance.now();
   const { player, shouldConnect } = await createOrGetMusicPlayer(interaction);
   if (shouldConnect) await player.connect().catch((error: unknown) => explainLavalinkError(error));
+  assertMusicPlayerActive(player);
 
   player.queue.add(track);
   const startsPlayback = !player.playing && !player.paused;
   if (startsPlayback) {
     player.setData("musicRequestStartedAt", startedAt);
-    await player.play().catch((error: unknown) => explainLavalinkError(error));
+    await startMusicPlayback(player).catch((error: unknown) => explainLavalinkError(error));
   }
 
   return { player, startsPlayback };
@@ -1338,15 +1361,18 @@ export async function ensureSameVoice(interaction: { guildId: string | null; gui
   return member;
 }
 
-async function updateMusicPanel(client: Client<true>, player: Player, embed: EmbedBuilder) {
+async function updateMusicPanel(
+  client: Client<true>, player: Player, embed: EmbedBuilder, isCurrent: () => boolean = () => true
+) {
   const channel = player.textChannelId
     ? await client.channels.fetch(player.textChannelId).catch(() => null)
     : null;
-  if (!channel?.isTextBased() || channel.isDMBased()) return;
+  if (!channel?.isTextBased() || channel.isDMBased() || !isCurrent()) return;
 
   const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
   if (panelTarget?.channelId === channel.id && "messages" in channel) {
     const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+    if (!isCurrent()) return;
     if (panelMessage) {
       await panelMessage.edit({
         content: null,
@@ -1358,6 +1384,7 @@ async function updateMusicPanel(client: Client<true>, player: Player, embed: Emb
     }
   }
 
+  if (!isCurrent()) return;
   const sent = await channel.send({ embeds: [embed] }).catch(() => null);
   if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
 }
@@ -1368,21 +1395,29 @@ async function recoverPlayback(
   failedTrack: MusicTrack | null,
   payload: unknown
 ) {
-  if (player.getData<boolean>("musicRecoveryInFlight")) return;
-  player.setData("musicRecoveryInFlight", true);
+  if (!failedTrack || manager?.getPlayer(player.guildId) !== player
+    || player.getData<boolean>("internal_destroystatus") || player.paused) return;
+  const failedKey = musicTrackKey(failedTrack);
+  if (player.getData<string>("musicRecoverySuppressed") === failedKey
+    || (player.queue.current && musicTrackKey(player.queue.current) !== failedKey)) return;
+  const job = recoveryJobs.begin(player, failedKey);
+  if (!job) return;
+  let expectedKey = job.trackKey;
+  const isCurrent = () => recoveryJobs.isCurrent(player, job)
+    && manager?.getPlayer(player.guildId) === player
+    && player.getData<string>("musicRecoverySuppressed") !== failedKey
+    && !player.getData<boolean>("internal_destroystatus")
+    && !player.paused
+    && (!player.queue.current || musicTrackKey(player.queue.current) === expectedKey);
 
   try {
-    const recovery = await findPlaybackRecovery(player, failedTrack, client.user);
+    if (!isCurrent()) return;
+    const recovery = await findPlaybackRecovery(player, failedTrack, client.user, isCurrent);
+    if (!isCurrent()) return;
     if (recovery) {
-      await updateMusicPanel(
-        client,
-        player,
-        musicEmbed(
-          "Trying Another Source",
-          `${trackLabel(failedTrack)}\nThe stream froze, so I am retrying through **${recovery.sourceLabel}**.`
-        )
-      );
+      // Start audio immediately; trackStart owns the UI once it really starts.
       player.setData("musicRequestStartedAt", performance.now());
+      expectedKey = musicTrackKey(recovery.track);
 
       try {
         await player.play({
@@ -1396,6 +1431,7 @@ async function recoverPlayback(
         );
         return;
       } catch (error) {
+        if (!isCurrent()) return;
         const detail = playbackFailureDetail(error);
         recordPlaybackFailure(player, recovery.track, detail);
         console.error(`[music:recovery-error] guild=${player.guildId} detail=${detail}`);
@@ -1412,10 +1448,43 @@ async function recoverPlayback(
       musicEmbed(
         "Playback Failed",
         `${trackLabel(failedTrack)}\n${detail}\n\nTry another result or check the Lavalink logs for the exact source error.`
-      )
+      ),
+      isCurrent
     );
   } finally {
-    player.deleteData("musicRecoveryInFlight");
+    recoveryJobs.finish(player, job);
+  }
+}
+
+function musicEventHandler<Args extends unknown[]>(event: string, handler: (...args: Args) => Promise<void>) {
+  return (...args: Args): void => {
+    void handler(...args).catch((error: unknown) => {
+      console.error(`[music:event-error] event=${event} detail=${safeMusicErrorMessage(error)}`);
+    });
+  };
+}
+
+export function cancelMusicRecovery(player: Player) {
+  const suppressedKey = player.queue.current ? musicTrackKey(player.queue.current)
+    : player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure")?.identifier ?? "";
+  recoveryJobs.cancel(player);
+  player.setData("musicRecoverySuppressed", suppressedKey);
+  player.setData("musicPanelRevision", randomUUID());
+  clearPlaybackRecovery(player);
+}
+
+export function startMusicPlayback(player: Player, options?: Parameters<Player["play"]>[0]) {
+  assertMusicPlayerActive(player);
+  recoveryJobs.cancel(player);
+  player.deleteData("musicLastPlaybackFailure");
+  player.deleteData("musicRecoveryState");
+  player.deleteData("musicRecoverySuppressed");
+  return player.play(options);
+}
+
+function assertMusicPlayerActive(player: Player) {
+  if (manager?.getPlayer(player.guildId) !== player || player.getData<boolean>("internal_destroystatus")) {
+    throw new Error("This music session was stopped while the song was loading. Use /music play to start a new session.");
   }
 }
 
@@ -1427,7 +1496,9 @@ function recordPlaybackFailure(player: Player, track: MusicTrack | null, detail:
   } satisfies MusicPlaybackFailure);
 }
 
-async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | null, requester: User) {
+async function findPlaybackRecovery(
+  player: Player, failedTrack: MusicTrack | null, requester: User, isCurrent: () => boolean
+) {
   if (!failedTrack) return null;
 
   const failedIdentifier = musicTrackKey(failedTrack);
@@ -1445,7 +1516,6 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
   if (
     env.musicYtDlpEnabled
     && isYoutubeTrack(failedTrack)
-    && failedTrack.userData?.blunt38Resolver !== "yt-dlp"
     && !state.attemptedSources.includes("yt-dlp")
   ) {
     state.attemptedSources.push("yt-dlp");
@@ -1459,6 +1529,7 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
         requester,
         exactTarget
       );
+      if (!isCurrent()) return null;
       const candidate = result.tracks[0];
       if (candidate) {
         state.attempts += 1;
@@ -1472,6 +1543,8 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
         };
       }
     } catch (error) {
+      if (!isCurrent()) return null;
+      recordPlaybackFailure(player, failedTrack, playbackFailureDetail(error));
       console.error(
         `[music:recovery-ytdlp-error] guild=${player.guildId} detail=${playbackFailureDetail(error)}`
       );
@@ -1479,6 +1552,7 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
   }
 
   for (const source of playbackRecoverySources()) {
+    if (!isCurrent()) return null;
     if (state.attemptedSources.includes(source)) continue;
     state.attemptedSources.push(source);
     player.setData("musicRecoveryState", state);
@@ -1489,6 +1563,7 @@ async function findPlaybackRecovery(player: Player, failedTrack: MusicTrack | nu
       );
       return null;
     });
+    if (!isCurrent()) return null;
     const candidate = result?.tracks.find((track) => {
       const key = musicTrackKey(track);
       return Boolean(key)
@@ -1537,9 +1612,18 @@ function musicTrackKey(track: MusicTrack) {
   return track.info.identifier || track.info.uri || "";
 }
 
+function invalidateFailedStream(track: MusicTrack | null) {
+  if (track?.userData?.blunt38Resolver !== "yt-dlp") return;
+  const uri = track.info.uri;
+  if (!uri || !isYoutubeUrl(uri)) return;
+  invalidateCachedYoutubeAudio(uri);
+  const key = standardPlaybackCacheKey(uri);
+  if (key) standardPlaybackCache.delete(key);
+}
+
 async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User, exactTarget?: string) {
   const startedAt = performance.now();
-  const cached = getCachedYoutubeAudio(query);
+  const cached = getCachedYoutubeAudio(exactTarget ?? query);
   let target = exactTarget;
   let lookupMs = 0;
 
@@ -1667,22 +1751,6 @@ function playbackFailureDetail(payload: unknown) {
 
 function cleanPlaybackDetail(detail: string) {
   return truncate(detail.replace(/\s+/g, " ").trim(), 600);
-}
-
-function friendlyPlaybackFailure(detail: string) {
-  if (/\b403\b|forbidden/i.test(detail)) {
-    return "The source rejected the audio stream (HTTP 403). Lavalink's YouTube OAuth or source plugin needs attention.";
-  }
-  if (/\b429\b|rate.?limit/i.test(detail)) {
-    return "The source rate-limited this server (HTTP 429). Wait a little or use a different source.";
-  }
-  if (/oauth|sign.?in|login|authentication/i.test(detail)) {
-    return "The source authentication expired or was rejected. Refresh Lavalink's YouTube OAuth session.";
-  }
-  if (/age.?restrict|copyright|not available|region/i.test(detail)) {
-    return "That upload is restricted or unavailable to this Lavalink server.";
-  }
-  return `Lavalink reported: ${truncate(detail.replace(/[`*_~]/g, ""), 400)}`;
 }
 
 function clearPlaybackRecovery(player: Player) {

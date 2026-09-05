@@ -42,6 +42,25 @@ export async function firstSuccessfulMusicPromise<T>(promises: readonly Promise<
   }
 }
 
+// Every source participates from the start, including a warmed recovery source.
+// A fast fallback must not wait for the primary-only deadline to expire.
+export async function raceMusicSources<T>(
+  candidates: readonly MusicSearchCandidate<T>[],
+  accepts: (value: T) => boolean,
+  fastTimeoutMs: number,
+  recoveryTimeoutMs: number,
+  onSlow: () => void = () => {}
+): Promise<MusicSearchWinner<T>> {
+  const race = firstAcceptableMusicResult(candidates, accepts);
+  try {
+    return await withinMusicSearchDeadline(race, fastTimeoutMs);
+  } catch (error) {
+    if (!(error instanceof MusicSearchDeadlineError)) throw error;
+    onSlow();
+    return withinMusicSearchDeadline(race, recoveryTimeoutMs);
+  }
+}
+
 export function mostUsefulMusicSearchError(error: unknown): Error {
   const errors = flattenMusicSearchErrors(error);
 
@@ -114,6 +133,10 @@ export class TtlLruCache<T> {
 
   clear() {
     this.entries.clear();
+  }
+
+  delete(key: string) {
+    return this.entries.delete(key);
   }
 
   get size() {

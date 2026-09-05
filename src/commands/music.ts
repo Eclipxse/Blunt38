@@ -2,6 +2,7 @@ import { MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from "discord.
 import type { Command } from "../types.js";
 import {
   applyMusicFilter,
+  cancelMusicRecovery,
   cancelSpotifyQueueWarmup,
   createMusicSearch,
   ensureMusicController,
@@ -18,6 +19,7 @@ import {
   playQuery,
   queueEmbed,
   setPlayerMusicSettings,
+  startMusicPlayback,
   trackLabel
 } from "../services/music.js";
 import { getGuildConfig, updateGuildConfig } from "../services/store.js";
@@ -322,66 +324,70 @@ export const musicCommand: Command = {
       return;
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       await ensureMusicController(interaction, player);
 
       if (subcommand === "pause") {
         await player.pause();
-        await interaction.reply({ content: "Paused.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Paused." });
         return;
       }
 
       if (subcommand === "previous") {
         const previous = await player.queue.shiftPrevious();
         if (!previous) throw new Error("There is no previous track yet.");
-        await player.play({ clientTrack: previous });
-        await interaction.reply({ content: `Playing **${previous.info.title}** again.`, flags: MessageFlags.Ephemeral });
+        cancelMusicRecovery(player);
+        await startMusicPlayback(player, { clientTrack: previous });
+        await interaction.editReply({ content: `Playing **${previous.info.title}** again.` });
         return;
       }
 
       if (subcommand === "replay") {
         if (!player.queue.current) throw new Error("There is no current track to replay.");
         await player.seek(0);
-        await interaction.reply({ content: "Restarted the current track.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Restarted the current track." });
         return;
       }
 
       if (subcommand === "resume") {
         await player.resume();
-        await interaction.reply({ content: "Resumed.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Resumed." });
         return;
       }
 
       if (subcommand === "skip") {
+        cancelMusicRecovery(player);
         await player.skip();
-        await interaction.reply({ content: "Skipped.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Skipped." });
         return;
       }
 
       if (subcommand === "stop") {
+        cancelMusicRecovery(player);
         cancelSpotifyQueueWarmup(player);
         await player.destroy("Stopped by command.");
-        await interaction.reply({ content: "Stopped playback and left voice.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Stopped playback and left voice." });
         return;
       }
 
       if (subcommand === "volume") {
         const percent = interaction.options.getInteger("percent", true);
         await player.setVolume(percent);
-        await interaction.reply({ content: `Volume set to ${percent}%.`, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: `Volume set to ${percent}%.` });
         return;
       }
 
       if (subcommand === "loop") {
         const mode = normalizeLoopMode(interaction.options.getString("mode", true));
         await player.setRepeatMode(mode);
-        await interaction.reply({ content: `Loop mode set to ${mode}.`, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: `Loop mode set to ${mode}.` });
         return;
       }
 
       if (subcommand === "shuffle") {
         await player.queue.shuffle();
-        await interaction.reply({ content: "Queue shuffled.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "Queue shuffled." });
         return;
       }
 
@@ -389,9 +395,8 @@ export const musicCommand: Command = {
         cancelSpotifyQueueWarmup(player);
         const count = player.queue.tracks.length;
         if (count) await player.queue.splice(0, count);
-        await interaction.reply({
-          content: count ? `Cleared **${count}** upcoming track(s).` : "The upcoming queue is already empty.",
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          content: count ? `Cleared **${count}** upcoming track(s).` : "The upcoming queue is already empty."
         });
         return;
       }
@@ -408,16 +413,15 @@ export const musicCommand: Command = {
         if (duration > 0 && position >= duration) throw new Error("That timestamp is past the end of the track.");
 
         await player.seek(position);
-        await interaction.reply({ content: `Jumped to \`${rawPosition}\`.`, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: `Jumped to \`${rawPosition}\`.` });
         return;
       }
 
       if (subcommand === "autoplay") {
         const enabled = interaction.options.getBoolean("enabled", true);
         setPlayerMusicSettings(player, { autoplayEnabled: enabled });
-        await interaction.reply({
-          content: `Autoplay is now **${enabled ? "on" : "off"}** for this session.`,
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          content: `Autoplay is now **${enabled ? "on" : "off"}** for this session.`
         });
         return;
       }
@@ -426,7 +430,7 @@ export const musicCommand: Command = {
         const value = interaction.options.getString("preset", true);
         if (!isMusicFilterPreset(value)) throw new Error("That sound filter is not available.");
         await applyMusicFilter(player, value);
-        await interaction.reply({ content: `Sound filter set to **${value}**.`, flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: `Sound filter set to **${value}**.` });
         return;
       }
 
@@ -439,9 +443,8 @@ export const musicCommand: Command = {
 
         await player.queue.splice(from - 1, 1);
         await player.queue.splice(to - 1, 0, track);
-        await interaction.reply({
-          content: `Moved **${track.info.title}** from position ${from} to ${to}.`,
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          content: `Moved **${track.info.title}** from position ${from} to ${to}.`
         });
         return;
       }
@@ -450,20 +453,18 @@ export const musicCommand: Command = {
         const position = interaction.options.getInteger("position", true);
         const removed = player.queue.tracks[position - 1];
         if (!removed) {
-          await interaction.reply({ content: "That queue position does not exist.", flags: MessageFlags.Ephemeral });
+          await interaction.editReply({ content: "That queue position does not exist." });
           return;
         }
 
         await player.queue.splice(position - 1, 1);
-        await interaction.reply({
-          content: `Removed **${removed.info.title}** from the queue.`,
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          content: `Removed **${removed.info.title}** from the queue.`
         });
       }
     } catch (error) {
-      await interaction.reply({
-        content: error instanceof Error ? error.message : "Could not control the player.",
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: error instanceof Error ? error.message : "Could not control the player."
       });
     }
   }
