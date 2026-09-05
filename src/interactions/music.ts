@@ -1,6 +1,7 @@
 import { type ButtonInteraction, MessageFlags, type StringSelectMenuInteraction } from "discord.js";
 import {
   applyMusicFilter,
+  cancelMusicRecovery,
   cancelSpotifyQueueWarmup,
   consumeMusicSearchSession,
   ensureMusicController,
@@ -13,6 +14,7 @@ import {
   queueEmbed,
   queueSearchResult,
   setPlayerMusicSettings,
+  startMusicPlayback,
   trackLabel
 } from "../services/music.js";
 
@@ -60,59 +62,63 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     return;
   }
 
+  await interaction.deferUpdate();
   try {
     await ensureMusicController(interaction, player);
 
     if (action === "pause") {
       await player.pause();
-      await interaction.update({ components: musicControlRows(player) });
+      await interaction.editReply({ components: musicControlRows(player) });
       return;
     }
 
     if (action === "resume") {
       await player.resume();
-      await interaction.update({ components: musicControlRows(player) });
+      await interaction.editReply({ components: musicControlRows(player) });
       return;
     }
 
     if (action === "previous") {
       const previous = await player.queue.shiftPrevious();
       if (!previous) throw new Error("There is no previous track yet.");
-      await player.play({ clientTrack: previous });
-      await interaction.reply({ content: `Playing **${previous.info.title}** again.`, flags: MessageFlags.Ephemeral });
+      cancelMusicRecovery(player);
+      await startMusicPlayback(player, { clientTrack: previous });
+      await interaction.followUp({ content: `Playing **${previous.info.title}** again.`, flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (action === "skip") {
+      cancelMusicRecovery(player);
       await player.skip();
-      await interaction.reply({ content: "Skipped.", flags: MessageFlags.Ephemeral });
+      await interaction.followUp({ content: "Skipped.", flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (action === "stop") {
+      cancelMusicRecovery(player);
       cancelSpotifyQueueWarmup(player);
       await player.destroy("Stopped by button.");
-      await interaction.update({ content: "Stopped playback and left voice.", embeds: [], components: [] });
+      await interaction.editReply({ content: "Stopped playback and left voice.", embeds: [], components: [] });
       return;
     }
 
     if (action === "loop") {
       const mode = nextLoopMode(player.repeatMode);
       await player.setRepeatMode(mode);
-      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
+      await interaction.editReply({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
       return;
     }
 
     if (action === "replay") {
       if (!player.queue.current) throw new Error("There is no current track to replay.");
       await player.seek(0);
-      await interaction.reply({ content: "Restarted the current track.", flags: MessageFlags.Ephemeral });
+      await interaction.followUp({ content: "Restarted the current track.", flags: MessageFlags.Ephemeral });
       return;
     }
 
     if (action === "shuffle") {
       await player.queue.shuffle();
-      await interaction.reply({ content: "Queue shuffled.", flags: MessageFlags.Ephemeral });
+      await interaction.followUp({ content: "Queue shuffled.", flags: MessageFlags.Ephemeral });
       return;
     }
 
@@ -120,12 +126,11 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       setPlayerMusicSettings(player, {
         autoplayEnabled: !player.getData<boolean>("musicAutoplayEnabled")
       });
-      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
+      await interaction.editReply({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
       return;
     }
 
     if (action === "volume-status") {
-      await interaction.deferUpdate();
       return;
     }
 
@@ -133,7 +138,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       const change = action === "volume-down" ? -10 : 10;
       const volume = Math.max(1, Math.min(100, player.volume + change));
       await player.setVolume(volume);
-      await interaction.update({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
+      await interaction.editReply({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
       return;
     }
 
@@ -141,13 +146,13 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       cancelSpotifyQueueWarmup(player);
       const count = player.queue.tracks.length;
       if (count) await player.queue.splice(0, count);
-      await interaction.update({ embeds: [queueEmbed(player)], components: musicQueueRows(player) });
+      await interaction.editReply({ embeds: [queueEmbed(player)], components: musicQueueRows(player) });
       return;
     }
 
-    await interaction.reply({ content: "Unknown music control.", flags: MessageFlags.Ephemeral });
+    await interaction.followUp({ content: "Unknown music control.", flags: MessageFlags.Ephemeral });
   } catch (error) {
-    await interaction.reply({
+    await interaction.followUp({
       content: error instanceof Error ? error.message : "Could not control the player.",
       flags: MessageFlags.Ephemeral
     });
@@ -167,11 +172,11 @@ export async function handleMusicSelect(interaction: StringSelectMenuInteraction
       return;
     }
 
+    await interaction.deferUpdate();
     try {
       await ensureMusicController(interaction, player);
       const preset = interaction.values[0] ?? "";
       if (!isMusicFilterPreset(preset)) throw new Error("That sound filter is not available.");
-      await interaction.deferUpdate();
       await applyMusicFilter(player, preset);
       await interaction.editReply({
         embeds: [musicControlsEmbed(player)],

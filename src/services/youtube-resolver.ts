@@ -104,6 +104,15 @@ export function getCachedYoutubeAudio(query: string, now = Date.now()) {
   return cached.value;
 }
 
+export function invalidateCachedYoutubeAudio(query: string) {
+  const key = youtubeCacheKey(query);
+  const cachedId = audioCache.get(key)?.value.id;
+  const id = youtubeVideoId(query) ?? cachedId;
+  for (const [entryKey, entry] of audioCache) {
+    if (entryKey === key || (id && entry.value.id === id)) audioCache.delete(entryKey);
+  }
+}
+
 export function youtubeAudioCacheExpiry(
   streamUrl: string,
   now: number,
@@ -127,9 +136,13 @@ export async function resolveYoutubeAudio(input: {
   timeoutMs: number;
   cacheTtlMs: number;
   ipFamily?: YoutubeResolverIpFamily;
-}) {
+}, run: typeof runYtDlp = runYtDlp) {
   const target = input.target ?? (isUrl(input.query) ? input.query : `ytsearch1:${input.query}`);
-  const lookupKeys = uniqueCacheKeys(input.query, target);
+  const expectedId = youtubeVideoId(target);
+  // A title is not a video identity. Exact links must not share cached or
+  // in-flight work with a different upload that happens to have the same title.
+  const cacheInputs = expectedId ? [target] : [input.query, target];
+  const lookupKeys = uniqueCacheKeys(...cacheInputs);
 
   for (const key of lookupKeys) {
     const cached = getCachedYoutubeAudioByKey(key);
@@ -158,14 +171,15 @@ export async function resolveYoutubeAudio(input: {
   ];
 
   const resolution = Promise.resolve().then(async () => {
-    const output = await runYtDlp(input.executable, args, input.timeoutMs);
+    const output = await run(input.executable, args, input.timeoutMs);
     const parsed = parseYtDlpPayload(output, input.query);
+    if (expectedId && parsed.id !== expectedId) {
+      throw new Error("yt-dlp returned a different video than the requested YouTube link.");
+    }
     const expiresAt = youtubeAudioCacheExpiry(parsed.streamUrl, Date.now(), input.cacheTtlMs);
     const resolved = { ...parsed, expiresAt };
     const cacheKeys = uniqueCacheKeys(
-      input.query,
-      target,
-      resolved.id,
+      ...cacheInputs,
       resolved.webpageUrl
     );
 
@@ -223,9 +237,10 @@ export function youtubeVideoId(value: string) {
     const parsed = new URL(value);
     const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
     if (host === "youtu.be") return parsed.pathname.split("/").filter(Boolean)[0];
-    if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+    if (host === "youtube.com" || host.endsWith(".youtube.com")
+      || host === "youtube-nocookie.com" || host.endsWith(".youtube-nocookie.com")) {
       return parsed.searchParams.get("v")
-        ?? (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/live/")
+        ?? (parsed.pathname.startsWith("/shorts/") || parsed.pathname.startsWith("/live/") || parsed.pathname.startsWith("/embed/")
           ? parsed.pathname.split("/").filter(Boolean)[1]
           : null);
     }
