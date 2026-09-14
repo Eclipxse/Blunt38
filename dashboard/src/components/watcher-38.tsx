@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 export type WatcherMode =
   | "loading"
@@ -425,6 +426,11 @@ export function Watcher38() {
     let animationFrame = 0;
     let stareTimer: number | null = null;
 
+    if (mode === "login" && (
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+      !window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    )) return;
+
     const updatePointer = (event: PointerEvent) => {
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       animationFrame = window.requestAnimationFrame(() => {
@@ -497,12 +503,12 @@ export function Watcher38() {
       window.removeEventListener("pointermove", updatePointer);
       window.removeEventListener("pointerdown", handlePointerDown);
     };
-  }, [changeChannel]);
+  }, [changeChannel, mode]);
 
   const activeChannel =
     CHANNELS.find((entry) => entry.id === channel) ?? CHANNELS[0];
 
-  return (
+  const watcher = (
     <aside
       ref={hostRef}
       className="girl-signal"
@@ -545,4 +551,11 @@ export function Watcher38() {
       </div>
     </aside>
   );
+
+  // One reactive watcher; the public login owns its responsive placement.
+  // Authenticated surfaces retain their existing positioning.
+  const loginSlot = mode === "login" && typeof document !== "undefined"
+    ? document.getElementById("login-watcher-slot")
+    : null;
+  return loginSlot ? createPortal(watcher, loginSlot) : watcher;
 }

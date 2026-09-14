@@ -1,147 +1,145 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { ArrowUpRight } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { LiquidWordmark } from "./liquid-wordmark";
+import styles from "./dashboard-login.module.css";
 
-type LiquidPreloaderProps = {
-  onComplete?: () => void;
+const INTRO_KEY = "blunt38:login-intro:v3";
+const FILL_DURATION = 3000;
+const EXIT_DURATION = 700;
+
+type Props = {
+  onComplete?: (restoreFocus?: boolean) => void;
+  skip?: boolean;
+  replay?: boolean;
+  destinationRef: RefObject<SVGSVGElement | null>;
 };
 
-const VIEWBOX_WIDTH = 1000;
-const VIEWBOX_HEIGHT = 200;
-
-function loadingProgress(elapsed: number) {
-  if (elapsed < 420) return 0;
-  if (elapsed < 3250) return ((elapsed - 420) / 2830) * 28;
-  if (elapsed < 4850) return 28 + ((elapsed - 3250) / 1600) * 52;
-  return 80 + Math.min(1, (elapsed - 4850) / 750) * 20;
-}
-
-function wavePath(progress: number, phase: number, still = false) {
-  const level = 210 - progress * 2.15;
-  const amplitude = still ? 0 : 10.5;
-  const points = 64;
-  let path = "";
-
-  for (let index = 0; index <= points; index += 1) {
-    const x = (index / points) * VIEWBOX_WIDTH;
-    const y =
-      level +
-      Math.sin(x / 92 + phase) * amplitude +
-      Math.sin(x / 41 - phase * 0.72) * amplitude * 0.18;
-    path += `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)} `;
-  }
-
-  return `${path}L${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT + 24} L0 ${
-    VIEWBOX_HEIGHT + 24
-  } Z`;
-}
-
-export function LiquidPreloader({ onComplete }: LiquidPreloaderProps) {
-  const clipId = `liquid-word-${useId().replaceAll(":", "")}`;
-  const waveRef = useRef<SVGPathElement>(null);
-  const counterRef = useRef<HTMLSpanElement>(null);
-  const [exiting, setExiting] = useState(false);
+export function LiquidPreloader({ onComplete, skip = false, replay = false, destinationRef }: Props) {
   const [complete, setComplete] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const markRef = useRef<SVGSVGElement>(null);
+  const skipRef = useRef<HTMLButtonElement>(null);
+  const counterRef = useRef<HTMLSpanElement>(null);
+  const finishRef = useRef<(immediate?: boolean, focus?: boolean) => void>(() => {});
+  const skipIntro = useCallback(() => finishRef.current(true, true), []);
 
   useEffect(() => {
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    const duration = reducedMotion ? 280 : 5600;
-    const exitDelay = reducedMotion ? 40 : 260;
-    const exitDuration = reducedMotion ? 40 : 820;
-    const startedAt = performance.now();
-    let frame = 0;
-    let displayedProgress = -1;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let seen = false;
+    try { seen = sessionStorage.getItem(INTRO_KEY) === "seen"; } catch { /* Private storage is optional. */ }
+    let finished = false;
+    let disposed = false;
+    let counterTimer: number | undefined;
+    let fillTimer: number | undefined;
     let exitTimer: number | undefined;
-    let completeTimer: number | undefined;
+    let travel: Animation | undefined;
+    let releaseScroll: ((interrupted?: boolean) => void) | undefined;
+    const startedAt = performance.now();
 
-    const tick = (now: number) => {
-      const elapsed = now - startedAt;
-      const progress = reducedMotion
-        ? Math.min(100, (elapsed / duration) * 100)
-        : Math.min(100, loadingProgress(elapsed));
-      const nextDisplayedProgress = Math.floor(progress);
-
-      waveRef.current?.setAttribute(
-        "d",
-        wavePath(progress, elapsed * 0.0022, reducedMotion)
-      );
-
-      if (nextDisplayedProgress !== displayedProgress) {
-        displayedProgress = nextDisplayedProgress;
-        if (counterRef.current) {
-          counterRef.current.textContent = String(nextDisplayedProgress);
-        }
-      }
-
-      if (elapsed < duration) {
-        frame = window.requestAnimationFrame(tick);
-        return;
-      }
-
-      exitTimer = window.setTimeout(() => setExiting(true), exitDelay);
-      completeTimer = window.setTimeout(() => {
-        setComplete(true);
-        onComplete?.();
-      }, exitDelay + exitDuration);
+    const done = (focus: boolean) => {
+      if (disposed) return;
+      releaseScroll?.();
+      setComplete(true);
+      onComplete?.(focus);
     };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); finish(true, true); }
+    };
+    const onMotion = () => { if (motion.matches) finish(true, replay); };
+    const finish = (immediate = false, focus = false) => {
+      if (finished) return;
+      finished = true;
+      window.clearInterval(counterTimer);
+      window.clearTimeout(fillTimer);
+      motion.removeEventListener("change", onMotion);
+      window.removeEventListener("keydown", onKey);
+      try { sessionStorage.setItem(INTRO_KEY, "seen"); } catch { /* Login still works. */ }
+      const restoreFocus = focus || replay || document.activeElement === skipRef.current;
+      if (immediate) { done(restoreFocus); return; }
+      if (counterRef.current) counterRef.current.textContent = "100";
+      const from = markRef.current?.getBoundingClientRect();
+      const to = destinationRef.current?.getBoundingClientRect();
+      if (from && to && from.width > 0 && to.width > 0) {
+        travel = markRef.current?.animate([
+          { transform: "translate(0, 0) scale(1)" },
+          { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${to.width / from.width})` }
+        ], { duration: EXIT_DURATION, easing: "cubic-bezier(0.16, 1, 0.3, 1)", fill: "forwards" });
+      }
+      setExiting(true);
+      exitTimer = window.setTimeout(() => done(restoreFocus), EXIT_DURATION);
+    };
+    finishRef.current = finish;
 
-    frame = window.requestAnimationFrame(tick);
+    if (skip || (!replay && seen) || motion.matches) finish(true, replay);
+    else {
+      // inert does not stop document scrolling. A fixed body also blocks an
+      // already-running smooth-scroll animation from moving the destination.
+      const root = document.documentElement;
+      const body = document.body;
+      const previous = {
+        position: body.style.position, top: body.style.top,
+        left: body.style.left, right: body.style.right,
+        overflow: root.style.overflow, gutter: root.style.scrollbarGutter,
+        behavior: root.style.scrollBehavior, x: window.scrollX, y: window.scrollY
+      };
+      root.style.overflow = "hidden";
+      root.style.scrollbarGutter = "stable";
+      root.style.scrollBehavior = "auto";
+      body.style.position = "fixed";
+      body.style.top = "0";
+      body.style.left = "0";
+      body.style.right = "0";
+      window.scrollTo(0, 0);
+      let released = false;
+      releaseScroll = (interrupted = false) => {
+        if (released) return;
+        released = true;
+        body.style.position = previous.position;
+        body.style.top = previous.top;
+        body.style.left = previous.left;
+        body.style.right = previous.right;
+        root.style.overflow = previous.overflow;
+        root.style.scrollbarGutter = previous.gutter;
+        // A completed/replayed intro lands at its masthead. Only an interrupted
+        // unmount restores the earlier position (for example route navigation).
+        window.scrollTo(interrupted ? previous.x : 0, interrupted ? previous.y : 0);
+        root.style.scrollBehavior = previous.behavior;
+      };
+      if (replay) skipRef.current?.focus({ preventScroll: true });
+      // The waves are CSS-driven; this is intro progress, not network progress.
+      counterTimer = window.setInterval(() => {
+        const progress = Math.min(100, Math.floor((performance.now() - startedAt) / FILL_DURATION * 100));
+        if (counterRef.current) counterRef.current.textContent = String(progress).padStart(3, "0");
+      }, 50);
+      fillTimer = window.setTimeout(() => finish(), FILL_DURATION);
+      motion.addEventListener("change", onMotion);
+      window.addEventListener("keydown", onKey);
+    }
 
     return () => {
-      window.cancelAnimationFrame(frame);
-      if (exitTimer) window.clearTimeout(exitTimer);
-      if (completeTimer) window.clearTimeout(completeTimer);
+      disposed = true;
+      releaseScroll?.(true);
+      window.clearInterval(counterTimer);
+      window.clearTimeout(fillTimer);
+      window.clearTimeout(exitTimer);
+      travel?.cancel();
+      motion.removeEventListener("change", onMotion);
+      window.removeEventListener("keydown", onKey);
+      finishRef.current = () => {};
     };
-  }, [onComplete]);
+  }, [destinationRef, onComplete, replay, skip]);
 
   if (complete) return null;
-
   return (
-    <div
-      className="liquid-preloader"
-      data-exiting={exiting}
-      aria-hidden="true"
-    >
-      <div className="liquid-preloader-center">
-        <svg
-          className="liquid-preloader-mark"
-          viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
-          role="presentation"
-        >
-          <defs>
-            <clipPath id={clipId}>
-              <path ref={waveRef} d={wavePath(0, 0)} />
-            </clipPath>
-          </defs>
-          <text
-            className="liquid-preloader-wordmark liquid-preloader-wordmark-ghost"
-            x="500"
-            y="190"
-            textAnchor="middle"
-            textLength="960"
-            lengthAdjust="spacingAndGlyphs"
-          >
-            BLUNT38
-          </text>
-          <text
-            className="liquid-preloader-wordmark liquid-preloader-wordmark-fill"
-            x="500"
-            y="190"
-            textAnchor="middle"
-            textLength="960"
-            lengthAdjust="spacingAndGlyphs"
-            clipPath={`url(#${clipId})`}
-          >
-            BLUNT38
-          </text>
-        </svg>
-
-        <div className="liquid-preloader-counter">
-          loading... <span ref={counterRef}>0</span>%
-        </div>
+    <div className={styles.preloader} data-native-scroll data-exiting={exiting} aria-label="blunt38 opening animation" inert={exiting}>
+      <div className={styles.introHeader}><span>blunt38 / opening sequence</span><span>Your server. Your rules.</span></div>
+      <div className={styles.introCenter}>
+        <LiquidWordmark ref={markRef} liquid />
+        <div className={styles.introReadout} aria-hidden="true"><span>Filling up. Hold your shit.</span><span><b ref={counterRef}>000</b><span className={styles.percent}> / 100</span></span></div>
       </div>
+      <div className={styles.introFooter}><span>38 reasons. None explained.</span><button ref={skipRef} type="button" onClick={skipIntro}>Skip intro<ArrowUpRight size={18} aria-hidden="true" /></button></div>
     </div>
   );
 }
