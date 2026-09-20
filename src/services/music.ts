@@ -1073,7 +1073,7 @@ export function consumeMusicSearchSession(sessionId: string, userId: string, gui
   }
 
   const session = musicSearchSessions.get(sessionId);
-  if (!session || session.expiresAt <= now) throw new Error("That search expired. Run `/music search` again.");
+  if (!session || session.expiresAt <= now) throw new Error("That search expired. Run `/search` again.");
   if (session.userId !== userId) throw new Error("That track picker belongs to someone else.");
   if (session.guildId !== guildId) throw new Error("That track picker belongs to another server.");
 
@@ -1171,7 +1171,7 @@ export function formatMs(ms: number) {
 export function musicEmbed(title: string, description: string) {
   return new EmbedBuilder()
     .setColor(palette.electric)
-    .setAuthor({ name: `${env.brandName} Music Deck` })
+    .setAuthor({ name: env.brandName })
     .setTitle(title)
     .setDescription(description)
     .setTimestamp();
@@ -1484,7 +1484,7 @@ export function startMusicPlayback(player: Player, options?: Parameters<Player["
 
 function assertMusicPlayerActive(player: Player) {
   if (manager?.getPlayer(player.guildId) !== player || player.getData<boolean>("internal_destroystatus")) {
-    throw new Error("This music session was stopped while the song was loading. Use /music play to start a new session.");
+    throw new Error("Playback stopped while the song was loading. Use /play to start a new session.");
   }
 }
 

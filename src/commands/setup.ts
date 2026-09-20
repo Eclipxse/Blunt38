@@ -5,7 +5,7 @@ import { setupHomePayload } from "../interactions/setup.js";
 export const setupCommand: Command = {
   data: new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Open the premium server setup panel.")
+    .setDescription("Configure server features and preferences.")
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .setDMPermission(false),
   async execute(interaction) {

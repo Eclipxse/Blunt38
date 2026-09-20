@@ -627,17 +627,17 @@ export function MusicView({
   updateConfig
 }: BaseViewProps) {
   const commands = [
-    ["/music play", "Search or paste a link"],
-    ["/music search", "Choose the exact result"],
-    ["/music queue", "See what plays next"],
-    ["/music loop", "Repeat a track or queue"],
+    ["/play", "Search or paste a link"],
+    ["/search", "Choose the exact result"],
+    ["/queue", "See what plays next"],
+    ["/loop", "Repeat a track or queue"],
     ["/music seek", "Jump to a timestamp"],
     ["/music filters", "Shape the current sound"],
     ["/music autoplay", "Keep related tracks coming"],
     ["/music previous", "Return to the last track"],
     ["/music move", "Reorder the queue"],
     ["/music clear", "Clear upcoming tracks"],
-    ["/music skip", "Move to the next track"]
+    ["/skip", "Move to the next track"]
   ];
 
   return (

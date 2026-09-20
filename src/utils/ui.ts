@@ -20,15 +20,14 @@ export const palette = {
 export function embed(title: string, description?: string, color = palette.primary) {
   return new EmbedBuilder()
     .setColor(color)
-    .setAuthor({ name: `${env.brandName} Premium Suite` })
-    .setTitle(`${title}`)
+    .setAuthor({ name: env.brandName })
+    .setTitle(title)
     .setDescription(description ?? null)
-    .setFooter({ text: `${env.brandName} // powered control system` })
     .setTimestamp();
 }
 
-export function panelEmbed(title: string, kicker: string, description: string, color = palette.primary, status = "Online") {
-  const built = embed(title, premiumDescription(description), color).setTitle(`${kicker} | ${title}`);
+export function panelEmbed(title: string, _kicker: string, description: string, color = palette.primary, status?: string) {
+  const built = embed(title, description, color);
   if (status) built.addFields({ name: "Status", value: statusValue(status), inline: true });
   return built;
 }
@@ -45,10 +44,6 @@ export function statusValue(value: string) {
   return `\`${value}\``;
 }
 
-export function premiumDescription(description: string) {
-  return [`**${description}**`, "", "`Premium interface`"].join("\n");
-}
-
 export function progressBar(percent: number, size = 14) {
   const normalized = Math.max(0, Math.min(100, percent));
   const filled = Math.round((normalized / 100) * size);
@@ -62,15 +57,14 @@ export function compactFields(fields: APIEmbedField[]) {
 export function backButton(customId = "setup:home") {
   return new ButtonBuilder()
     .setCustomId(customId)
-    .setEmoji("↩️")
     .setLabel("Back")
     .setStyle(ButtonStyle.Secondary);
 }
 
 export function dangerConfirmRow(confirmId: string, cancelId: string) {
   return new ActionRowBuilder<ButtonBuilder>().addComponents(
-    new ButtonBuilder().setCustomId(confirmId).setEmoji("✅").setLabel("Confirm").setStyle(ButtonStyle.Danger),
-    new ButtonBuilder().setCustomId(cancelId).setEmoji("🌙").setLabel("Cancel").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId(confirmId).setLabel("Confirm").setStyle(ButtonStyle.Danger),
+    new ButtonBuilder().setCustomId(cancelId).setLabel("Cancel").setStyle(ButtonStyle.Secondary)
   );
 }
 
