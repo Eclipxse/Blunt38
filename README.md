@@ -70,16 +70,21 @@ The bot runs on Node.js and TypeScript. Persistent data lives in Supabase Postgr
 /rank           /leaderboard     /embed           /birthday
 /serverinfo     /userinfo        /emoji           /sticker
 /minigame       /music           /voice           /draw
+/announce       /starboard
+
+/play           /search          /pause           /resume
+/skip           /stop            /queue           /nowplaying
+/volume         /loop            /shuffle
 ```
 
-The heavier command groups have subcommands. The important ones:
+Everyday music controls are direct commands: use `/play` with a song name or supported link, `/search` to choose an exact result, and `/queue` to see upcoming tracks. Advanced controls stay grouped under `/music`.
+
+The command groups have subcommands. The important ones:
 
 ```text
 /ai ask | setup | disable | prompt | persona | status
 /goodbye set | test | clear
-/music play | search | pause | resume | previous | replay | skip | stop
-       queue | nowplaying | volume | loop | shuffle | clear | seek
-       autoplay | filters | move | remove | settings
+/music previous | replay | clear | seek | autoplay | filters | move | remove | settings
 /role create | permissions | preset | give | remove | autorole | clear-autorole
 /birthday set | remove | list | channel
 /server preview | build | cleanup
@@ -150,6 +155,16 @@ BOT_BRAND_NAME=blunt38
 ```
 
 `DISCORD_GUILD_ID` makes command updates appear quickly in one test server. Remove it when you want global commands everywhere. Global registration can take longer to propagate because Discord likes suspense.
+
+After the updated code reaches the VPS, run these commands from the bot directory to build, register the new slash-command menu, and restart the existing PM2 process:
+
+```bash
+npm run build
+npm run deploy:commands
+pm2 restart blunt38-bot
+```
+
+Command registration updates only the guild named by `DISCORD_GUILD_ID`, or global commands when it is unset. It does not clear commands from the other scope. These are deployment instructions; the local command cleanup does not deploy or restart the VPS bot.
 
 ## // developer portal ritual
 
@@ -272,7 +287,7 @@ Start Lavalink before the bot:
 java -Xms256M -Xmx1G -jar Lavalink.jar
 ```
 
-Ordinary `/music play` song-name searches use Lavalink's fast path first. When `MUSIC_YTDLP_ENABLED=true`, direct YouTube links race Lavalink against yt-dlp so a failing Lavalink client does not add a deadline-sized delay; stalled YouTube tracks reuse the same in-flight or cached direct stream before another source. Signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` and never past their provider expiry. `MUSIC_YTDLP_IP_FAMILY` accepts `auto`, `ipv4`, or `ipv6`; only force IPv6 after verifying that the host has working IPv6 egress.
+Ordinary `/play` song-name searches use Lavalink's fast path first. When `MUSIC_YTDLP_ENABLED=true`, direct YouTube links race Lavalink against yt-dlp so a failing Lavalink client does not add a deadline-sized delay; stalled YouTube tracks reuse the same in-flight or cached direct stream before another source. Signed audio streams are cached for up to `MUSIC_YTDLP_CACHE_TTL_MS` and never past their provider expiry. `MUSIC_YTDLP_IP_FAMILY` accepts `auto`, `ipv4`, or `ipv6`; only force IPv6 after verifying that the host has working IPv6 egress.
 
 Spotify track and album metadata uses `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET`. Spotify's playlist-items API is now limited to playlists owned by or shared with the authorized user. blunt38 uses the official user-authorized API for those playlists and falls back to Spotify's public embed metadata for other public playlists. Add `SPOTIFY_REDIRECT_URI` to the Spotify app dashboard, run `npm run spotify:authorize`, approve the account once, and restart the bot to enable owned, private, and collaborative playlists. The helper writes the refresh token to `.env` without printing it, and blunt38 refreshes access automatically afterward.
 
@@ -282,7 +297,7 @@ For a bot running on a VPS, keep the callback on loopback and forward it from th
 ssh -L 8888:127.0.0.1:8888 root@your-server
 ```
 
-Then run `npm run spotify:authorize` in the bot directory on the VPS and open the printed Spotify URL. blunt38 uses Spotify only for metadata, resolves a confident YouTube Music match through Lavalink first, optionally falls back to yt-dlp when enabled, then tries a matching SoundCloud result. It never plays Spotify audio or bypasses Spotify DRM. Private, unavailable, and local Spotify tracks are skipped with a clear queue summary. Use `/music play <Spotify URL>` or `!play <Spotify URL>`; the legacy `!play` bridge requires Discord's Message Content Intent and `ENABLE_MESSAGE_CONTENT_INTENT=true`.
+Then run `npm run spotify:authorize` in the bot directory on the VPS and open the printed Spotify URL. blunt38 uses Spotify only for metadata, resolves a confident YouTube Music match through Lavalink first, optionally falls back to yt-dlp when enabled, then tries a matching SoundCloud result. It never plays Spotify audio or bypasses Spotify DRM. Private, unavailable, and local Spotify tracks are skipped with a clear queue summary. Use `/play <Spotify URL>` or `!play <Spotify URL>`; the legacy `!play` bridge requires Discord's Message Content Intent and `ENABLE_MESSAGE_CONTENT_INTENT=true`.
 
 The upgraded deck includes an exact-result picker, previous and replay controls, timestamp seeking, queue pagination and reordering, session autoplay, and native Lavalink filters for balanced EQ, bass boost, nightcore, vaporwave, and karaoke. Audio dispatch runs in parallel with the loading-panel update, and an empty player stays voice-connected for five minutes so follow-up requests avoid another Discord handshake. `/music settings` or the dashboard Music page configures the guild DJ role, starting volume, and autoplay default. Without a DJ role, everyone in the active voice channel keeps normal control access.
 

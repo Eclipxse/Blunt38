@@ -75,7 +75,7 @@ export function CommandPalette({
       { id: "tickets", label: "Tickets", description: "Private support routing", keywords: "help desk", icon: Ticket, run: automation("tickets") },
       { id: "voice", label: "Temporary voice", description: "Join-to-create voice rooms", keywords: "vc channel", icon: Mic2, run: automation("voice") },
       { id: "logs", label: "Server logs", description: "Moderation event route", keywords: "audit mod", icon: ScrollText, run: automation("logs") },
-      { id: "copy-music", label: "/music search", description: "Copy exact-result music search", keywords: "command song", icon: Copy, run: copy("/music search") },
+      { id: "copy-music", label: "/search", description: "Copy exact-result music search", keywords: "command song", icon: Copy, run: copy("/search") },
       { id: "copy-setup", label: "/setup", description: "Copy Discord setup command", keywords: "command configure", icon: Copy, run: copy("/setup") }
     ];
   }, [onAutomation, onClose, onCopied, onNavigate]);

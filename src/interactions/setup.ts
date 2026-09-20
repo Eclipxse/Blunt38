@@ -40,7 +40,7 @@ export async function setupHomePayload(guildId: string): Promise<InteractionRepl
 
   return {
     embeds: [
-      panelEmbed("Server Setup", "CONTROL ROOM", "Configure every major bot module from one private panel.", config.accentColor ?? palette.electric)
+      panelEmbed("Server Setup", "CONTROL ROOM", "Configure channels, tickets, roles, and the panel theme.", config.accentColor ?? palette.electric)
         .addFields(
           compactFields([
             { name: "Welcome Channel", value: mentionChannel(config.welcomeChannelId), inline: true },
@@ -184,7 +184,7 @@ export async function handleSetupComponent(
     if (interaction.customId === "setup:preview") {
       const config = await getGuildConfig(interaction.guildId);
       await interaction.update({
-        embeds: [panelEmbed("Preview", "LIVE THEME", "This is how premium bot panels will look in your server.", config.accentColor ?? palette.electric)],
+        embeds: [panelEmbed("Preview", "LIVE THEME", "Preview your server's panel theme.", config.accentColor ?? palette.electric)],
         components: homeRows()
       });
       return;

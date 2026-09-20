@@ -12,7 +12,7 @@ import { serverInfoCommand, userInfoCommand } from "./info.js";
 import { leaderboardCommand, levelingCommand, rankCommand } from "./leveling.js";
 import { minigameCommand } from "./minigame.js";
 import { moderateCommand } from "./moderate.js";
-import { musicCommand } from "./music.js";
+import { musicCommands } from "./music.js";
 import { pollCommand } from "./poll.js";
 import { purgeCommand } from "./purge.js";
 import { roleCommand } from "./role.js";
@@ -54,7 +54,7 @@ export const commands: Command[] = [
   emojiCommand,
   stickerCommand,
   minigameCommand,
-  musicCommand,
+  ...musicCommands,
   voiceCommand,
   drawCommand
 ];

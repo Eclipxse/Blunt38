@@ -21,7 +21,7 @@ export function giveawayEmbed(giveaway: Giveaway, winnerMentions: string[] = [])
 
   return new EmbedBuilder()
     .setColor(ended ? palette.success : palette.warning)
-    .setAuthor({ name: `${env.brandName} Premium Suite` })
+    .setAuthor({ name: env.brandName })
     .setTitle(ended ? "GIVEAWAY COMPLETE" : "GIVEAWAY LIVE")
     .setDescription(description)
     .addFields(
