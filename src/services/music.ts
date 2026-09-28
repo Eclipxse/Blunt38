@@ -24,10 +24,9 @@ import {
 import { env } from "../env.js";
 import {
   classifyMusicPlaybackEnd,
-  clampMusicPage,
-  isConfidentMusicMatch,
-  musicPageCount
+  isConfidentMusicMatch
 } from "../utils/music-control.js";
+import { buildQueueEmbed, buildQueueRows } from "../utils/music-queue.js";
 import {
   cloneCachedMusicSearchResult,
   firstAcceptableMusicResult,
@@ -141,7 +140,6 @@ export const musicFilterChoices: Array<{ name: string; value: MusicFilterPreset 
 ];
 
 const musicSearchSessions = new Map<string, MusicSearchSession>();
-const queuePageSize = 8;
 const maxPlaybackRecoveryAttempts = 2;
 const musicIdleDisconnectMs = 5 * 60_000;
 const standardPlaybackCache = new TtlLruCache<CachedStandardPlayback>(env.musicSearchCacheMax);
@@ -1228,24 +1226,12 @@ export function musicControlsEmbed(player: Player) {
 }
 
 export function queueEmbed(player: Player, requestedPage = 0) {
-  const page = clampMusicPage(requestedPage, player.queue.tracks.length, queuePageSize);
-  const pages = musicPageCount(player.queue.tracks.length, queuePageSize);
-  const start = page * queuePageSize;
-  const current = player.queue.current ? `**Now:** ${player.queue.current.info.title}` : "**Now:** Nothing playing";
-  const upcoming = player.queue.tracks.slice(start, start + queuePageSize).map((track, index) => {
-    return `\`${start + index + 1}.\` ${track.info.title} - ${formatTrackDuration(track)}`;
-  });
-  const totalDuration = player.queue.tracks.reduce((sum, track) => {
-    return track.info.isStream ? sum : sum + (track.info.duration ?? 0);
-  }, 0);
-
-  return musicEmbed(
-    `Music Queue - Page ${page + 1}/${pages}`,
-    [current, "", upcoming.length ? upcoming.join("\n") : "No upcoming tracks."].join("\n")
-  ).addFields(
-    { name: "Upcoming", value: `\`${player.queue.tracks.length}\``, inline: true },
-    { name: "Queue Time", value: `\`${formatMs(totalDuration)}\``, inline: true }
-  );
+  return buildQueueEmbed({
+    current: player.queue.current,
+    tracks: player.queue.tracks,
+    paused: player.paused,
+    position: player.position
+  }, requestedPage, env.brandName, palette.electric);
 }
 
 export function musicControlRows(player?: Player) {
@@ -1325,31 +1311,12 @@ export function musicExpandedControlRows(player: Player) {
 }
 
 export function musicQueueRows(player: Player, requestedPage = 0) {
-  const page = clampMusicPage(requestedPage, player.queue.tracks.length, queuePageSize);
-  const pages = musicPageCount(player.queue.tracks.length, queuePageSize);
-  return [
-    ...musicControlRows(player),
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`music:queue:${page - 1}`)
-        .setEmoji("⬅️")
-        .setLabel("Previous page")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page <= 0),
-      new ButtonBuilder()
-        .setCustomId(`music:queue:${page + 1}`)
-        .setEmoji("➡️")
-        .setLabel("Next page")
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(page >= pages - 1),
-      new ButtonBuilder()
-        .setCustomId("music:clear")
-        .setEmoji("🧹")
-        .setLabel("Clear upcoming")
-        .setStyle(ButtonStyle.Danger)
-        .setDisabled(player.queue.tracks.length === 0)
-    )
-  ];
+  return buildQueueRows({
+    current: player.queue.current,
+    tracks: player.queue.tracks,
+    paused: player.paused,
+    position: player.position
+  }, requestedPage);
 }
 
 export async function ensureSameVoice(interaction: { guildId: string | null; guild?: { members: { fetch(userId: string): Promise<GuildMember> } } | null; user: { id: string } }, player: Player) {

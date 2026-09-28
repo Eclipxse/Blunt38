@@ -1,4 +1,5 @@
 import { type ButtonInteraction, MessageFlags, type StringSelectMenuInteraction } from "discord.js";
+import { isQueuePanel, queuePage } from "../utils/music-queue.js";
 import {
   applyMusicFilter,
   cancelMusicRecovery,
@@ -37,6 +38,9 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
   }
 
   const [, action, detail] = interaction.customId.split(":");
+  const fromQueue = isQueuePanel(interaction.message.embeds[0]?.title);
+  const currentPage = queuePage(Number(detail ?? 0), player.queue.tracks.length);
+  const queuePayload = () => ({ embeds: [queueEmbed(player, currentPage)], components: musicQueueRows(player, currentPage) });
 
   if (action === "controls") {
     const payload = {
@@ -54,7 +58,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
   if (action === "queue") {
     const page = Number(detail ?? 0);
     const payload = { embeds: [queueEmbed(player, page)], components: musicQueueRows(player, page) };
-    if (interaction.message.embeds[0]?.title?.startsWith("Music Queue") || interaction.message.flags.has(MessageFlags.Ephemeral)) {
+    if (fromQueue || interaction.message.flags.has(MessageFlags.Ephemeral)) {
       await interaction.update(payload);
     } else {
       await interaction.reply({ ...payload, flags: MessageFlags.Ephemeral });
@@ -68,13 +72,13 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
     if (action === "pause") {
       await player.pause();
-      await interaction.editReply({ components: musicControlRows(player) });
+      await interaction.editReply(fromQueue ? queuePayload() : { components: musicControlRows(player) });
       return;
     }
 
     if (action === "resume") {
       await player.resume();
-      await interaction.editReply({ components: musicControlRows(player) });
+      await interaction.editReply(fromQueue ? queuePayload() : { components: musicControlRows(player) });
       return;
     }
 
@@ -90,6 +94,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     if (action === "skip") {
       cancelMusicRecovery(player);
       await player.skip();
+      if (fromQueue) await interaction.editReply(queuePayload());
       await interaction.followUp({ content: "Skipped.", flags: MessageFlags.Ephemeral });
       return;
     }
