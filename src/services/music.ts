@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   Client,
@@ -27,6 +28,8 @@ import {
   isConfidentMusicMatch
 } from "../utils/music-control.js";
 import { buildQueueEmbed, buildQueueRows } from "../utils/music-queue.js";
+import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, resolvePlayerState, type MusicPlayerState, type MusicPlayerView } from "../utils/music-player.js";
+import { renderMusicPlayerCard } from "./music-player-card.js";
 import {
   cloneCachedMusicSearchResult,
   firstAcceptableMusicResult,
@@ -248,6 +251,7 @@ export function initMusic(client: Client<true>) {
   manager.on("playerDestroy", (player) => cancelMusicRecovery(player));
 
   manager.on("trackStart", musicEventHandler("trackStart", async (player, track) => {
+    player.setData("musicAwaitingTrackStart", false);
     recoveryJobs.cancel(player);
     player.deleteData("musicRecoverySuppressed");
     const revision = randomUUID();
@@ -308,13 +312,10 @@ export function initMusic(client: Client<true>) {
           content: `${trackLabel(track)}\nRequested by **${getRequesterName(track)}**`,
           embeds: [],
           files: [visual],
+          attachments: [],
           components: musicControlRows(player)
         }
-      : {
-          content: undefined,
-          embeds: [nowPlayingEmbed(player, track)],
-          components: musicControlRows(player)
-        };
+      : await nowPlayingPayload(player, track);
 
     const pendingPanel = player.getData<Promise<void>>("musicPanelPending");
     if (pendingPanel) await pendingPanel;
@@ -470,10 +471,7 @@ export async function createOrGetMusicPlayer(context: MusicRequestContext) {
 
 export async function playQuery(interaction: ChatInputCommandInteraction, query: string) {
   return playInput(interaction, query, async (player, first) => {
-    const loadingMessage = await interaction.editReply({
-      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
-      components: musicControlRows(player)
-    });
+    const loadingMessage = await interaction.editReply(await nowPlayingPayload(player, first, "loading"));
 
     return { channelId: loadingMessage.channelId, messageId: loadingMessage.id };
   });
@@ -488,10 +486,7 @@ export async function playMessageQuery(message: Pick<Message<true>, "guild" | "a
   };
 
   return playInput(context, query, async (player, first) => {
-    const loadingMessage = await message.reply({
-      embeds: [musicEmbed("Loading Track", `${trackLabel(first)}\nGetting the deck ready...`)],
-      components: musicControlRows(player)
-    });
+    const loadingMessage = await message.reply(await nowPlayingPayload(player, first, "loading"));
 
     return { channelId: loadingMessage.channelId, messageId: loadingMessage.id };
   });
@@ -1175,38 +1170,56 @@ export function musicEmbed(title: string, description: string) {
     .setTimestamp();
 }
 
-function compactProgressBar(position: number, duration: number, size = 16) {
-  if (!duration) return "▱".repeat(size);
-  const filled = Math.max(0, Math.min(size, Math.round((position / duration) * size)));
-  return `${"▰".repeat(filled)}${"▱".repeat(size - filled)}`;
+function playerView(player: Player, track: MusicTrack | null = player.queue.current, state?: MusicPlayerState): MusicPlayerView {
+  const awaitingStart = player.getData<boolean>("musicAwaitingTrackStart") ?? false;
+  const displayTrack = track ?? (awaitingStart ? player.queue.tracks[0] : null);
+  return {
+    track: displayTrack, state: state ?? resolvePlayerState(Boolean(displayTrack), player.paused, player.playing, awaitingStart),
+    position: player.position ?? 0, volume: player.volume, queued: player.queue.tracks.length,
+    requester: getRequesterName(displayTrack), voiceChannelId: player.voiceChannelId
+  };
 }
 
 export function nowPlayingEmbed(player: Player, track = player.queue.current) {
-  const duration = track?.info.duration ?? 0;
-  const position = Math.max(0, player.position ?? 0);
-  const progress = track?.info.isStream
-    ? "`LIVE`"
-    : `\`${formatMs(position)} / ${formatMs(duration)}\`\n${compactProgressBar(position, duration)}`;
-  const filter = player.getData<MusicFilterPreset>("musicFilterPreset") ?? "off";
-  const autoplay = player.getData<boolean>("musicAutoplayEnabled") ?? false;
-  const voiceChannel = player.voiceChannelId ? `<#${player.voiceChannelId}>` : "Voice channel";
-  const built = new EmbedBuilder()
-    .setColor(palette.electric)
-    .setTitle("Now playing")
-    .setDescription([
-      trackLabel(track),
-      "",
-      `Requested by **${getRequesterName(track)}** • ${voiceChannel}`,
-      "",
-      progress
-    ].join("\n"))
-    .setFooter({
-      text: `${player.volume}% volume • Loop ${player.repeatMode} • Autoplay ${autoplay ? "on" : "off"} • Filter ${filter} • ${player.queue.tracks.length} queued`
-    });
+  return buildPlayerEmbed(playerView(player, track), env.brandName, palette.electric);
+}
 
-  const artwork = track?.info.artworkUrl;
-  if (artwork) built.setThumbnail(artwork);
-  return built;
+export async function nowPlayingPayload(player: Player, track: MusicTrack | null = player.queue.current, state?: MusicPlayerState) {
+  const view = playerView(player, track, state);
+  const embed = buildPlayerEmbed(view, env.brandName, palette.electric);
+  const image = await renderMusicPlayerCard(view).catch(() => null);
+  const files = image ? [new AttachmentBuilder(image, {
+    name: "listening-room.png",
+    description: "A record player and a small bunny in headphones, with the current playback status and position snapshot."
+  })] : [];
+  if (image) embed.setImage("attachment://listening-room.png");
+  return { content: "", embeds: [embed], files, attachments: [], components: buildPlayerRows(view.state, view.queued) };
+}
+
+function playerPanelStamp(player: Player) {
+  return JSON.stringify([player.getData("musicPanelRevision"), player.queue.current && musicTrackKey(player.queue.current), player.paused, player.playing, player.getData("musicAwaitingTrackStart"), player.volume, player.queue.tracks.length]);
+}
+
+export async function currentNowPlayingPayload(player: Player) {
+  const stamp = playerPanelStamp(player);
+  return currentPanelResult(() => nowPlayingPayload(player), () => manager?.getPlayer(player.guildId) === player
+    && !player.getData<boolean>("internal_destroystatus") && playerPanelStamp(player) === stamp);
+}
+
+// Update only the tracked native player; custom Visual Studio artwork stays untouched.
+export async function refreshNowPlayingPanel(client: Client<true>, player: Player) {
+  try {
+    const target = player.getData<MusicPanelTarget>("musicPanelTarget");
+    if (!target) return;
+    const channel = await client.channels.fetch(target.channelId);
+    if (!channel?.isTextBased() || !("messages" in channel)) return;
+    const message = await channel.messages.fetch(target.messageId);
+    if (!isPlayerPanel(message.embeds[0]?.author?.name, message.embeds[0]?.title)) return;
+    const payload = await currentNowPlayingPayload(player);
+    if (payload) await message.edit(payload);
+  } catch {
+    // A deleted message or missing permission must not turn successful playback into an error.
+  }
 }
 
 export function musicControlsEmbed(player: Player) {
@@ -1235,25 +1248,7 @@ export function queueEmbed(player: Player, requestedPage = 0) {
 }
 
 export function musicControlRows(player?: Player) {
-  const paused = Boolean(player?.paused);
-  return [
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId("music:previous").setEmoji("⏮️").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder()
-        .setCustomId(paused ? "music:resume" : "music:pause")
-        .setEmoji(paused ? "▶️" : "⏸️")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:skip").setEmoji("⏭️").setStyle(ButtonStyle.Secondary)
-    ),
-    new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder()
-        .setCustomId("music:controls")
-        .setEmoji("🎚️")
-        .setLabel("Open controls")
-        .setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("music:stop").setEmoji("✖️").setStyle(ButtonStyle.Secondary)
-    )
-  ];
+  return buildPlayerRows(player ? playerView(player).state : "idle", player?.queue.tracks.length ?? 0, false);
 }
 
 export function musicExpandedControlRows(player: Player) {
@@ -1442,6 +1437,7 @@ export function cancelMusicRecovery(player: Player) {
 
 export function startMusicPlayback(player: Player, options?: Parameters<Player["play"]>[0]) {
   assertMusicPlayerActive(player);
+  player.setData("musicAwaitingTrackStart", true);
   recoveryJobs.cancel(player);
   player.deleteData("musicLastPlaybackFailure");
   player.deleteData("musicRecoveryState");

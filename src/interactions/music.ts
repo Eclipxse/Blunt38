@@ -1,10 +1,12 @@
 import { type ButtonInteraction, MessageFlags, type StringSelectMenuInteraction } from "discord.js";
 import { isQueuePanel, queuePage } from "../utils/music-queue.js";
+import { isPlayerPanel } from "../utils/music-player.js";
 import {
   applyMusicFilter,
   cancelMusicRecovery,
   cancelSpotifyQueueWarmup,
   consumeMusicSearchSession,
+  currentNowPlayingPayload,
   ensureMusicController,
   getMusicPlayer,
   isMusicFilterPreset,
@@ -14,6 +16,7 @@ import {
   musicQueueRows,
   queueEmbed,
   queueSearchResult,
+  refreshNowPlayingPanel,
   setPlayerMusicSettings,
   startMusicPlayback,
   trackLabel
@@ -39,8 +42,17 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
   const [, action, detail] = interaction.customId.split(":");
   const fromQueue = isQueuePanel(interaction.message.embeds[0]?.title);
+  const fromPlayer = isPlayerPanel(interaction.message.embeds[0]?.author?.name, interaction.message.embeds[0]?.title);
   const currentPage = queuePage(Number(detail ?? 0), player.queue.tracks.length);
   const queuePayload = () => ({ embeds: [queueEmbed(player, currentPage)], components: musicQueueRows(player, currentPage) });
+
+  if (action === "refresh") {
+    await interaction.deferUpdate();
+    if (!fromPlayer) return;
+    const payload = await currentNowPlayingPayload(player);
+    if (payload) await interaction.editReply(payload);
+    return;
+  }
 
   if (action === "controls") {
     const payload = {
@@ -72,13 +84,17 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
     if (action === "pause") {
       await player.pause();
-      await interaction.editReply(fromQueue ? queuePayload() : { components: musicControlRows(player) });
+      const payload = fromQueue ? queuePayload() : fromPlayer ? await currentNowPlayingPayload(player) : { components: musicControlRows(player) };
+      if (payload) await interaction.editReply(payload);
+      if (!fromPlayer) await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
     if (action === "resume") {
       await player.resume();
-      await interaction.editReply(fromQueue ? queuePayload() : { components: musicControlRows(player) });
+      const payload = fromQueue ? queuePayload() : fromPlayer ? await currentNowPlayingPayload(player) : { components: musicControlRows(player) };
+      if (payload) await interaction.editReply(payload);
+      if (!fromPlayer) await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
@@ -103,7 +119,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       cancelMusicRecovery(player);
       cancelSpotifyQueueWarmup(player);
       await player.destroy("Stopped by button.");
-      await interaction.editReply({ content: "Stopped playback and left voice.", embeds: [], components: [] });
+      await interaction.editReply({ content: "Stopped playback and left voice.", embeds: [], components: [], attachments: [] });
       return;
     }
 
@@ -144,6 +160,7 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
       const volume = Math.max(1, Math.min(100, player.volume + change));
       await player.setVolume(volume);
       await interaction.editReply({ embeds: [musicControlsEmbed(player)], components: musicExpandedControlRows(player) });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 

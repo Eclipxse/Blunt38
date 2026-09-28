@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-28T22:55:59+05:30",
+  "title": "Design System: blunt38 Discord music player",
+  "extensions": {
+    "typographyMeta": {
+      "title": { "displayName": "Track title", "purpose": "Local Inter registered as Player Sans; source-raster pixels only." },
+      "body": { "displayName": "Artist", "purpose": "Single measured line, ellipsized to fit the raster text region." },
+      "status": { "displayName": "Playback status", "purpose": "State label above the track title." },
+      "metadata": { "displayName": "Volume and queue", "purpose": "Secondary source-raster information." },
+      "timing": { "displayName": "Position snapshot", "purpose": "Last-update timing, never an animated clock." }
+    },
+    "shadows": [],
+    "motion": [],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Raster surface specimen",
+      "kind": "card",
+      "refersTo": "raster-card",
+      "description": "Self-contained SVG specimen of the implemented raster surface. It is not a Discord message or a replacement for the generated artwork.",
+      "html": "<svg class=\"ds-player-surface\" viewBox=\"0 0 1200 420\" role=\"img\" aria-label=\"Graphite raster card surface\"><defs><linearGradient id=\"ds-player-surface-gradient\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#282831\"/><stop offset=\"1\" stop-color=\"#17171e\"/></linearGradient></defs><rect width=\"1200\" height=\"420\" rx=\"28\" fill=\"url(#ds-player-surface-gradient)\"/></svg>",
+      "css": ".ds-player-surface { display: block; width: 100%; max-width: 1200px; height: auto; }"
+    },
+    {
+      "name": "Static progress specimen",
+      "kind": "custom",
+      "refersTo": "raster-progress",
+      "description": "Illustrative halfway snapshot using the implemented rail and marker geometry. Decorative and noninteractive; no seek or live-update behavior.",
+      "html": "<svg class=\"ds-player-progress\" viewBox=\"0 0 1200 30\" role=\"img\" aria-label=\"Example static position snapshot, halfway through a track\"><rect x=\"54\" y=\"12\" width=\"1092\" height=\"6\" rx=\"3\" fill=\"#484550\"/><rect x=\"54\" y=\"12\" width=\"546\" height=\"6\" rx=\"3\" fill=\"#c4b4f0\"/><circle cx=\"600\" cy=\"15\" r=\"6\" fill=\"#f5f3fa\"/></svg>",
+      "css": ".ds-player-progress { display: block; width: 100%; max-width: 1200px; height: auto; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "A pocket listening room",
+    "overview": "This scoped extension gives the Discord player an Apple-like restraint: clear track hierarchy, a quietly dimensional record and a small original bunny wearing headphones. Graphite, warm white and restrained lavender support the music metadata. The bunny accompanies the track; it does not replace useful information.\n\nThis file governs only the default loading and now-playing message and its local raster artwork. The root product and design files remain authoritative for the dashboard. The surface contract is `../../.impeccable/surfaces/discord-music-player.md`; implementation lives in `../../src/utils/music-player.ts`, `../../src/services/music-player-card.ts` and `../../src/services/music.ts`.",
+    "keyCharacteristics": [
+      "Native readable metadata and labeled controls.",
+      "Quiet local artwork with a small headphone bunny.",
+      "Truthful playback states and position snapshots.",
+      "Existing custom Visual Studio artwork remains supported."
+    ],
+    "rules": [
+      { "name": "The Native Boundary Rule", "body": "Exact visual tokens in this document apply only to the raster we render; Discord owns native typography, button geometry, focus treatment and responsive layout.", "section": "colors" },
+      { "name": "The Snapshot Rule", "body": "Position describes the last panel update, not a running clock, seek control or audio visualization.", "section": "components" }
+    ],
+    "dos": [
+      "Do keep track identity, playback state and actions available as native Discord text and controls.",
+      "Do preserve the local Inter font, original bunny provenance and text-only rendering fallback.",
+      "Do label position as a snapshot and represent live streams and unknown durations honestly.",
+      "Do preserve custom Visual Studio templates and existing playback authorization."
+    ],
+    "donts": [
+      "Don't paint fake clickable controls into the illustration.",
+      "Don't claim animation, audio reactivity, realtime position or guaranteed round-trip latency.",
+      "Don't impose raster pixel values on native Discord controls or invent mobile breakpoints.",
+      "Don't promote this scoped listening-room direction into a replacement for the dashboard design system."
+    ]
+  }
+}

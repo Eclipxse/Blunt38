@@ -14,9 +14,10 @@ import {
   musicQueueRows,
   musicSearchRow,
   normalizeLoopMode,
-  nowPlayingEmbed,
+  nowPlayingPayload,
   playQuery,
   queueEmbed,
+  refreshNowPlayingPanel,
   setPlayerMusicSettings,
   startMusicPlayback,
   trackLabel
@@ -177,7 +178,8 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
   }
 
   if (subcommand === "nowplaying") {
-    await interaction.reply({ embeds: [nowPlayingEmbed(player)], components: musicControlRows(player) });
+    await interaction.deferReply();
+    await interaction.editReply(await nowPlayingPayload(player));
     return;
   }
 
@@ -188,6 +190,7 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
     if (subcommand === "pause") {
       await player.pause();
       await interaction.editReply({ content: "Paused." });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
@@ -204,12 +207,14 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
       if (!player.queue.current) throw new Error("There is no current track to replay.");
       await player.seek(0);
       await interaction.editReply({ content: "Restarted the current track." });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
     if (subcommand === "resume") {
       await player.resume();
       await interaction.editReply({ content: "Resumed." });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
@@ -232,6 +237,7 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
       const percent = interaction.options.getInteger("percent", true);
       await player.setVolume(percent);
       await interaction.editReply({ content: `Volume set to ${percent}%.` });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
@@ -271,6 +277,7 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
 
       await player.seek(position);
       await interaction.editReply({ content: `Jumped to \`${rawPosition}\`.` });
+      await refreshNowPlayingPanel(interaction.client, player);
       return;
     }
 
