@@ -4,14 +4,14 @@ Mode: Operate. Scope: loading and now-playing Discord messages, not the dashboar
 
 ## Direction contract
 
-THESIS: A pocket listening room, with a small headphone bunny accompanying the real track. No fake clickable controls in artwork.
+THESIS: A midnight-violet listening card guided by the user's October 1 reference. No fake clickable controls or baked-in track metadata.
 
-OWN-WORLD: Graphite, warm white, restrained lavender; native Discord text and labeled buttons. Original bunny asset and a quietly dimensional record.
+OWN-WORLD: Near-black indigo, violet and cyan record highlights, crescent details and pale lavender copy. Native Discord text and labeled buttons.
 
 STORY: Identify the track, distinguish loading/playing/paused, then pause, skip or browse the queue.
 
-FIRST VIEWPORT: Native track title and artist above a wide illustration; record left, bunny right, real position snapshot below. Previous/Pause/Skip first, Queue/More/Stop second.
+FIRST VIEWPORT: Vinyl left; real two-line title, artist, requester and position in the middle; character on the right. A real next-track strip below. Existing native controls underneath.
 
-FORM: Narrow extension of the established Discord player; user-pinned Apple hierarchy and bunny. No concept seed needed. Artwork is local; no render network fetch; no periodic API edits.
+FORM: User-pinned reference, narrow Discord extension. Raven fully replaces the bunny. Use the clean character artwork supplied October 1 directly and retain its provenance. No seed needed. No network fetch in rendering or periodic edits. Discord owns the native control styling.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

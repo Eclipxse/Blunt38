@@ -4,6 +4,7 @@ import type { QueueTrack } from "./music-queue.js";
 export type MusicPlayerState = "loading" | "playing" | "paused" | "idle";
 export type MusicPlayerView = {
   track?: QueueTrack | null;
+  nextTrack?: QueueTrack | null;
   state: MusicPlayerState;
   position: number;
   volume: number;
@@ -54,6 +55,10 @@ export function buildPlayerEmbed(view: MusicPlayerView, brand: string, color: nu
     `Requested by ${escapeMarkdown(playerText(view.requester, "Unknown", 40))}${voice}`
   ].join("\n"));
   embed.setFooter({ text: `${view.queued} up next · ${view.state === "loading" ? "Playback starts when ready" : "Position at last update · Refresh for latest"}` });
+  const next = view.nextTrack;
+  if (next) {
+    embed.addFields({ name: "Up next", value: `${escapeMarkdown(playerText(next.info.title, "Unknown track", 120))}\n${escapeMarkdown(playerText(next.info.author, "Unknown artist", 70))}` });
+  }
   return embed;
 }
 
@@ -61,6 +66,13 @@ export function resolvePlayerState(hasTrack: boolean, paused: boolean, playing: 
   if (paused && hasTrack) return "paused";
   if (awaitingStart) return "loading";
   return hasTrack && playing ? "playing" : "idle";
+}
+
+export function playerQueueSnapshot<T>(tracks: readonly T[], track: T | null | undefined, awaitingStart: boolean) {
+  // A pending starting track may still occupy the queue's first slot. Compare
+  // object identity so an intentional repeat of the same song stays up next.
+  const offset = awaitingStart && track != null && tracks[0] === track ? 1 : 0;
+  return { nextTrack: tracks[offset], queued: Math.max(0, tracks.length - offset) };
 }
 
 export async function currentPanelResult<T>(build: () => Promise<T>, isCurrent: () => boolean): Promise<T | null> {
@@ -80,7 +92,7 @@ export function buildPlayerRows(state: MusicPlayerState, queued = 0, refresh = t
       button("skip", "Skip", unavailable)
     ),
     new ActionRowBuilder<ButtonBuilder>().addComponents(
-      button("queue:0", `Queue · ${queued}`), ...(refresh ? [button("refresh", "Refresh")] : []), button("controls", "More"), button("stop", "Stop")
+      button("queue:0", `Queue · ${queued}`), ...(refresh ? [button("refresh", "Refresh")] : []), button("controls", "More"), button("stop", "Stop").setStyle(ButtonStyle.Danger)
     )
   ];
 }

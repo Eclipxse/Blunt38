@@ -28,7 +28,7 @@ import {
   isConfidentMusicMatch
 } from "../utils/music-control.js";
 import { buildQueueEmbed, buildQueueRows } from "../utils/music-queue.js";
-import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, resolvePlayerState, type MusicPlayerState, type MusicPlayerView } from "../utils/music-player.js";
+import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, playerQueueSnapshot, resolvePlayerState, type MusicPlayerState, type MusicPlayerView } from "../utils/music-player.js";
 import { renderMusicPlayerCard } from "./music-player-card.js";
 import {
   cloneCachedMusicSearchResult,
@@ -1173,9 +1173,11 @@ export function musicEmbed(title: string, description: string) {
 function playerView(player: Player, track: MusicTrack | null = player.queue.current, state?: MusicPlayerState): MusicPlayerView {
   const awaitingStart = player.getData<boolean>("musicAwaitingTrackStart") ?? false;
   const displayTrack = track ?? (awaitingStart ? player.queue.tracks[0] : null);
+  const { nextTrack, queued } = playerQueueSnapshot(player.queue.tracks, displayTrack, state === "loading" || awaitingStart);
   return {
+    nextTrack,
     track: displayTrack, state: state ?? resolvePlayerState(Boolean(displayTrack), player.paused, player.playing, awaitingStart),
-    position: player.position ?? 0, volume: player.volume, queued: player.queue.tracks.length,
+    position: player.position ?? 0, volume: player.volume, queued,
     requester: getRequesterName(displayTrack), voiceChannelId: player.voiceChannelId
   };
 }
@@ -1190,14 +1192,14 @@ export async function nowPlayingPayload(player: Player, track: MusicTrack | null
   const image = await renderMusicPlayerCard(view).catch(() => null);
   const files = image ? [new AttachmentBuilder(image, {
     name: "listening-room.png",
-    description: "A record player and a small bunny in headphones, with the current playback status and position snapshot."
+    description: "A midnight-violet vinyl player with the supplied Raven portrait, current playback status, position snapshot and next-track details."
   })] : [];
   if (image) embed.setImage("attachment://listening-room.png");
   return { content: "", embeds: [embed], files, attachments: [], components: buildPlayerRows(view.state, view.queued) };
 }
 
 function playerPanelStamp(player: Player) {
-  return JSON.stringify([player.getData("musicPanelRevision"), player.queue.current && musicTrackKey(player.queue.current), player.paused, player.playing, player.getData("musicAwaitingTrackStart"), player.volume, player.queue.tracks.length]);
+  return JSON.stringify([player.getData("musicPanelRevision"), player.queue.current && musicTrackKey(player.queue.current), player.paused, player.playing, player.getData("musicAwaitingTrackStart"), player.volume, player.queue.tracks.length, player.queue.tracks.slice(0, 2).map(musicTrackKey)]);
 }
 
 export async function currentNowPlayingPayload(player: Player) {

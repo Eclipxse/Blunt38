@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, playerTiming, playerUrl, resolvePlayerState, type MusicPlayerView } from "./music-player.js";
+import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, playerQueueSnapshot, playerTiming, playerUrl, resolvePlayerState, type MusicPlayerView } from "./music-player.js";
 import { renderMusicPlayerCard } from "../services/music-player-card.js";
 
 const view: MusicPlayerView = {
@@ -77,10 +77,41 @@ test("local card renders PNG at a bounded size and reuses matching snapshots", a
   const image = await first;
   assert.equal(image.toString("hex", 0, 8), "89504e470d0a1a0a");
   assert.equal(image.readUInt32BE(16), 1200);
-  assert.equal(image.readUInt32BE(20), 420);
+  assert.equal(image.readUInt32BE(20), 520);
   assert.ok(image.length < 1_000_000);
   const paused = await renderMusicPlayerCard({ ...view, state: "paused" });
   assert.notDeepEqual(image, paused);
+});
+
+test("next-track metadata is accessible, sanitized and absent when the queue is empty", () => {
+  const nextTrack = { info: { title: "@everyone **Next**", author: "Artist", duration: 200000 } };
+  const embed = buildPlayerEmbed({ ...view, nextTrack }, "b", 1).toJSON();
+  assert.equal(embed.fields?.[0].name, "Up next");
+  assert.match(embed.fields![0].value, /Artist/);
+  assert.doesNotMatch(embed.fields![0].value, /@everyone/);
+  assert.equal(buildPlayerEmbed(view, "b", 1).toJSON().fields, undefined);
+  assert.equal(buildPlayerRows("playing")[1].toJSON().components.at(-1)!.style, 4);
+});
+
+test("a starting track is excluded from up-next counts without dropping intentional repeats", () => {
+  const starting = view.track!;
+  const repeat = { info: { ...starting.info } };
+  assert.deepEqual(playerQueueSnapshot([starting], starting, true), { nextTrack: undefined, queued: 0 });
+  assert.deepEqual(playerQueueSnapshot([starting, repeat], starting, true), { nextTrack: repeat, queued: 1 });
+  assert.deepEqual(playerQueueSnapshot([repeat], starting, true), { nextTrack: repeat, queued: 1 });
+  assert.deepEqual(playerQueueSnapshot([repeat], starting, false), { nextTrack: repeat, queued: 1 });
+  assert.deepEqual(playerQueueSnapshot([], null, false), { nextTrack: undefined, queued: 0 });
+});
+
+test("card cache respects requester and the actual next song even with unchanged queue count", async () => {
+  const nextTrack = { info: { title: "Next song", author: "Artist", duration: 200000 } };
+  const first = await renderMusicPlayerCard({ ...view, nextTrack });
+  const requester = await renderMusicPlayerCard({ ...view, nextTrack, requester: "Someone else" });
+  const changed = await renderMusicPlayerCard({ ...view, nextTrack: { info: { ...nextTrack.info, title: "Other song" } } });
+  const live = await renderMusicPlayerCard({ ...view, nextTrack: { info: { ...nextTrack.info, isStream: true } } });
+  assert.notDeepEqual(first, requester);
+  assert.notDeepEqual(first, changed);
+  assert.notDeepEqual(first, live);
 });
 
 test("refresh cannot infer playback before trackStart and custom panels omit it", () => {

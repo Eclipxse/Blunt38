@@ -1,14 +1,101 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-28T22:55:59+05:30",
+  "generatedAt": "2026-10-01T23:20:39.4472164+05:30",
   "title": "Design System: blunt38 Discord music player",
   "extensions": {
+    "colorMeta": {
+      "accent-violet": {
+        "role": "primary",
+        "displayName": "Accent violet",
+        "tonalRamp": [
+          "oklch(15% 0.1678 300.60)",
+          "oklch(26.43% 0.1678 300.60)",
+          "oklch(37.86% 0.1678 300.60)",
+          "oklch(49.29% 0.1678 300.60)",
+          "oklch(60.71% 0.1678 300.60)",
+          "oklch(72.14% 0.1678 300.60)",
+          "oklch(83.57% 0.1678 300.60)",
+          "oklch(95% 0.1678 300.60)"
+        ]
+      },
+      "crescent-violet": {
+        "role": "primary",
+        "displayName": "Crescent violet",
+        "tonalRamp": [
+          "oklch(15% 0.2237 295.26)",
+          "oklch(26.43% 0.2237 295.26)",
+          "oklch(37.86% 0.2237 295.26)",
+          "oklch(49.29% 0.2237 295.26)",
+          "oklch(60.71% 0.2237 295.26)",
+          "oklch(72.14% 0.2237 295.26)",
+          "oklch(83.57% 0.2237 295.26)",
+          "oklch(95% 0.2237 295.26)"
+        ]
+      },
+      "secondary-text": {
+        "role": "neutral",
+        "displayName": "Secondary text",
+        "tonalRamp": [
+          "oklch(15% 0.0580 299.89)",
+          "oklch(26.43% 0.0580 299.89)",
+          "oklch(37.86% 0.0580 299.89)",
+          "oklch(49.29% 0.0580 299.89)",
+          "oklch(60.71% 0.0580 299.89)",
+          "oklch(72.14% 0.0580 299.89)",
+          "oklch(83.57% 0.0580 299.89)",
+          "oklch(95% 0.0580 299.89)"
+        ]
+      },
+      "midnight": {
+        "role": "neutral",
+        "displayName": "Midnight",
+        "tonalRamp": [
+          "oklch(15% 0.0174 284.01)",
+          "oklch(26.43% 0.0174 284.01)",
+          "oklch(37.86% 0.0174 284.01)",
+          "oklch(49.29% 0.0174 284.01)",
+          "oklch(60.71% 0.0174 284.01)",
+          "oklch(72.14% 0.0174 284.01)",
+          "oklch(83.57% 0.0174 284.01)",
+          "oklch(95% 0.0174 284.01)"
+        ]
+      },
+      "record-dark": {
+        "role": "neutral",
+        "displayName": "Record dark",
+        "tonalRamp": [
+          "oklch(15% 0.0177 283.85)",
+          "oklch(26.43% 0.0177 283.85)",
+          "oklch(37.86% 0.0177 283.85)",
+          "oklch(49.29% 0.0177 283.85)",
+          "oklch(60.71% 0.0177 283.85)",
+          "oklch(72.14% 0.0177 283.85)",
+          "oklch(83.57% 0.0177 283.85)",
+          "oklch(95% 0.0177 283.85)"
+        ]
+      }
+    },
     "typographyMeta": {
-      "title": { "displayName": "Track title", "purpose": "Local Inter registered as Player Sans; source-raster pixels only." },
-      "body": { "displayName": "Artist", "purpose": "Single measured line, ellipsized to fit the raster text region." },
-      "status": { "displayName": "Playback status", "purpose": "State label above the track title." },
-      "metadata": { "displayName": "Volume and queue", "purpose": "Secondary source-raster information." },
-      "timing": { "displayName": "Position snapshot", "purpose": "Last-update timing, never an animated clock." }
+      "title": {
+        "displayName": "Track title",
+        "purpose": "Local Inter registered as Player Sans; semibold title across at most two source-raster lines."
+      },
+      "body": {
+        "displayName": "Artist",
+        "purpose": "Single measured line, ellipsized to fit the current-track raster region."
+      },
+      "status": {
+        "displayName": "Playback status",
+        "purpose": "Functional state label above the current track."
+      },
+      "metadata": {
+        "displayName": "Requester",
+        "purpose": "Subordinate requester or idle-session text; source-raster pixels only."
+      },
+      "timing": {
+        "displayName": "Position snapshot",
+        "purpose": "Last-update position and known duration, never an animated clock."
+      }
     },
     "shadows": [],
     "motion": [],
@@ -19,42 +106,78 @@
       "name": "Raster surface specimen",
       "kind": "card",
       "refersTo": "raster-card",
-      "description": "Self-contained SVG specimen of the implemented raster surface. It is not a Discord message or a replacement for the generated artwork.",
-      "html": "<svg class=\"ds-player-surface\" viewBox=\"0 0 1200 420\" role=\"img\" aria-label=\"Graphite raster card surface\"><defs><linearGradient id=\"ds-player-surface-gradient\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\"><stop offset=\"0\" stop-color=\"#282831\"/><stop offset=\"1\" stop-color=\"#17171e\"/></linearGradient></defs><rect width=\"1200\" height=\"420\" rx=\"28\" fill=\"url(#ds-player-surface-gradient)\"/></svg>",
+      "description": "Self-contained SVG specimen of the implemented 1200×520 background and outline. It omits the supplied portrait and is not a Discord message.",
+      "html": "<svg class=\"ds-player-surface\" viewBox=\"0 0 1200 520\" role=\"img\" aria-label=\"Midnight-indigo raster card surface\"><defs><linearGradient id=\"ds-player-surface-gradient\" gradientUnits=\"userSpaceOnUse\" x1=\"0\" y1=\"0\" x2=\"1200\" y2=\"520\"><stop offset=\"0\" stop-color=\"#10101d\"/><stop offset=\".6\" stop-color=\"#090911\"/><stop offset=\"1\" stop-color=\"#171329\"/></linearGradient></defs><rect width=\"1200\" height=\"520\" rx=\"24\" fill=\"url(#ds-player-surface-gradient)\"/><rect x=\"1\" y=\"1\" width=\"1198\" height=\"518\" rx=\"23\" fill=\"none\" stroke=\"#645090\" stroke-width=\"1.5\"/></svg>",
       "css": ".ds-player-surface { display: block; width: 100%; max-width: 1200px; height: auto; }"
+    },
+    {
+      "name": "Vinyl specimen",
+      "kind": "custom",
+      "description": "Static SVG translation of the canvas vinyl and crescent. Illustration only; it is not an audio-reactive waveform or control.",
+      "html": "<svg class=\"ds-player-vinyl\" viewBox=\"20 75 280 285\" role=\"img\" aria-label=\"Static violet-and-cyan vinyl with a crescent label\"><defs><linearGradient id=\"ds-player-vinyl-rim\" gradientUnits=\"userSpaceOnUse\" x1=\"36\" y1=\"90\" x2=\"285\" y2=\"340\"><stop offset=\"0\" stop-color=\"#423381\"/><stop offset=\".45\" stop-color=\"#9856f5\"/><stop offset=\".8\" stop-color=\"#302347\"/><stop offset=\"1\" stop-color=\"#76e9ed\"/></linearGradient><linearGradient id=\"ds-player-vinyl-material\" gradientUnits=\"userSpaceOnUse\" x1=\"50\" y1=\"100\" x2=\"240\" y2=\"340\"><stop offset=\"0\" stop-color=\"#070710\"/><stop offset=\".23\" stop-color=\"#382747\"/><stop offset=\".39\" stop-color=\"#080810\"/><stop offset=\".7\" stop-color=\"#15121d\"/><stop offset=\".86\" stop-color=\"#3c344e\"/><stop offset=\"1\" stop-color=\"#090910\"/></linearGradient></defs><circle cx=\"159\" cy=\"218\" r=\"133\" fill=\"#080810\"/><circle cx=\"159\" cy=\"218\" r=\"125\" fill=\"none\" stroke=\"url(#ds-player-vinyl-rim)\" stroke-width=\"3\"/><circle cx=\"159\" cy=\"218\" r=\"119\" fill=\"url(#ds-player-vinyl-material)\"/><circle cx=\"159\" cy=\"218\" r=\"44\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"48\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"52\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"56\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"60\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"64\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"68\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"72\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"76\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"80\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"84\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"88\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"92\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"96\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"100\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"104\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"108\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"112\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"116\" fill=\"none\" stroke=\"#d6bbff16\" stroke-width=\".7\"/><circle cx=\"159\" cy=\"218\" r=\"40\" fill=\"#211337\"/><path transform=\"translate(163 218)\" d=\"M0 -24 A24 24 0 0 0 0 24 C-19.2 12 -19.2 -12 0 -24\" fill=\"#9861ff\"/><circle cx=\"159\" cy=\"218\" r=\"4\" fill=\"#b49aff\"/></svg>",
+      "css": ".ds-player-vinyl { display: block; width: 280px; max-width: 100%; height: auto; }"
+    },
+    {
+      "name": "Current-track typography specimen",
+      "kind": "custom",
+      "refersTo": "raster-title",
+      "description": "Illustrative sample of the implemented state, title, artist and requester hierarchy. Player Sans is the local Inter alias; the preview falls back to sans-serif if unavailable.",
+      "html": "<svg class=\"ds-player-type\" viewBox=\"300 40 490 240\" role=\"img\" aria-label=\"Example current-track text hierarchy\"><rect x=\"300\" y=\"40\" width=\"490\" height=\"240\" fill=\"#090911\"/><path transform=\"translate(323 64)\" d=\"M0 -18 A18 18 0 0 0 0 18 C-14.4 9 -14.4 -9 0 -18\" fill=\"#9861ff\"/><text x=\"349\" y=\"70\" class=\"ds-player-status\">NOW PLAYING</text><text x=\"310\" y=\"132\" class=\"ds-player-title\">Example track title</text><text x=\"310\" y=\"220\" class=\"ds-player-artist\">Example artist</text><text x=\"310\" y=\"263\" class=\"ds-player-requester\">Requested by Example listener</text></svg>",
+      "css": ".ds-player-type { display: block; width: 100%; max-width: 490px; height: auto; } .ds-player-type text { font-family: 'Player Sans', sans-serif; } .ds-player-status { font-size: 18px; font-weight: 500; fill: #b98bff; } .ds-player-title { font-size: 32px; font-weight: 600; fill: #f5f2ff; } .ds-player-artist { font-size: 25px; font-weight: 400; fill: #d1c4ed; } .ds-player-requester { font-size: 20px; font-weight: 400; fill: #b9acd4; }"
     },
     {
       "name": "Static progress specimen",
       "kind": "custom",
       "refersTo": "raster-progress",
-      "description": "Illustrative halfway snapshot using the implemented rail and marker geometry. Decorative and noninteractive; no seek or live-update behavior.",
-      "html": "<svg class=\"ds-player-progress\" viewBox=\"0 0 1200 30\" role=\"img\" aria-label=\"Example static position snapshot, halfway through a track\"><rect x=\"54\" y=\"12\" width=\"1092\" height=\"6\" rx=\"3\" fill=\"#484550\"/><rect x=\"54\" y=\"12\" width=\"546\" height=\"6\" rx=\"3\" fill=\"#c4b4f0\"/><circle cx=\"600\" cy=\"15\" r=\"6\" fill=\"#f5f3fa\"/></svg>",
-      "css": ".ds-player-progress { display: block; width: 100%; max-width: 1200px; height: auto; }"
+      "description": "Illustrative halfway snapshot using the implemented rail, elapsed gradient and marker geometry. Decorative and noninteractive; no seek or live-update behavior.",
+      "html": "<svg class=\"ds-player-progress\" viewBox=\"0 0 450 20\" role=\"img\" aria-label=\"Example static position snapshot, halfway through a finite track\"><defs><linearGradient id=\"ds-player-progress-elapsed\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\"><stop offset=\"0\" stop-color=\"#9448ff\"/><stop offset=\"1\" stop-color=\"#79eef1\"/></linearGradient></defs><rect width=\"450\" height=\"20\" fill=\"#090911\"/><rect y=\"7\" width=\"450\" height=\"6\" rx=\"3\" fill=\"#484060\"/><rect y=\"7\" width=\"225\" height=\"6\" rx=\"3\" fill=\"url(#ds-player-progress-elapsed)\"/><circle cx=\"225\" cy=\"10\" r=\"7\" fill=\"#99f5fa\"/></svg>",
+      "css": ".ds-player-progress { display: block; width: 100%; max-width: 450px; height: auto; }"
+    },
+    {
+      "name": "Up next strip specimen",
+      "kind": "custom",
+      "refersTo": "raster-up-next",
+      "description": "Self-contained SVG of the implemented empty-queue strip. Live track data replaces the fallback copy at render time.",
+      "html": "<svg class=\"ds-player-next\" viewBox=\"-.75 -.75 783.5 84.5\" role=\"img\" aria-label=\"Up next: The queue is yours. Add another song with /play.\"><rect width=\"782\" height=\"83\" rx=\"22\" fill=\"#12121fee\" stroke=\"#3a3056\" stroke-width=\"1.5\"/><text x=\"24\" y=\"49\" class=\"ds-player-next-label\">Up next</text><rect x=\"119\" y=\"19\" width=\"1\" height=\"45\" fill=\"#413653\"/><text x=\"143\" y=\"33\" class=\"ds-player-next-title\">The queue is yours</text><text x=\"143\" y=\"62\" class=\"ds-player-next-artist\">Add another song with /play</text></svg>",
+      "css": ".ds-player-next { display: block; width: 100%; max-width: 782px; height: auto; } .ds-player-next text { font-family: 'Player Sans', sans-serif; } .ds-player-next-label { font-size: 19px; font-weight: 500; fill: #b98bff; } .ds-player-next-title { font-size: 21px; font-weight: 500; fill: #e3daf5; } .ds-player-next-artist { font-size: 17px; font-weight: 400; fill: #b9acd4; }"
     }
   ],
   "narrative": {
-    "northStar": "A pocket listening room",
-    "overview": "This scoped extension gives the Discord player an Apple-like restraint: clear track hierarchy, a quietly dimensional record and a small original bunny wearing headphones. Graphite, warm white and restrained lavender support the music metadata. The bunny accompanies the track; it does not replace useful information.\n\nThis file governs only the default loading and now-playing message and its local raster artwork. The root product and design files remain authoritative for the dashboard. The surface contract is `../../.impeccable/surfaces/discord-music-player.md`; implementation lives in `../../src/utils/music-player.ts`, `../../src/services/music-player-card.ts` and `../../src/services/music.ts`.",
+    "northStar": "A midnight-violet listening room",
+    "overview": "This scoped extension pairs a near-black indigo surface with a violet-and-cyan vinyl, crescent details and pale lavender copy. The supplied Raven portrait occupies the right side; real track metadata, requester, position and next-track information carry the reading hierarchy. The portrait is an identity asset, not a substitute for useful information.\n\nThis file governs only the default loading and now-playing Discord message and its local raster artwork. The root product and design files remain authoritative for the dashboard. The surface contract is `../../.impeccable/surfaces/discord-music-player.md`; implementation lives in `../../src/utils/music-player.ts`, `../../src/services/music-player-card.ts` and `../../src/services/music.ts`. The user's October 1 Raven reference replaces the former bunny throughout this shipping surface.",
     "keyCharacteristics": [
       "Native readable metadata and labeled controls.",
-      "Quiet local artwork with a small headphone bunny.",
+      "Supplied Raven portrait with retained source provenance.",
+      "Violet-and-cyan vinyl beside real track and next-track data.",
       "Truthful playback states and position snapshots.",
       "Existing custom Visual Studio artwork remains supported."
     ],
     "rules": [
-      { "name": "The Native Boundary Rule", "body": "Exact visual tokens in this document apply only to the raster we render; Discord owns native typography, button geometry, focus treatment and responsive layout.", "section": "colors" },
-      { "name": "The Snapshot Rule", "body": "Position describes the last panel update, not a running clock, seek control or audio visualization.", "section": "components" }
+      {
+        "name": "The Native Boundary Rule",
+        "body": "Exact visual tokens in this document apply only to the raster we render; Discord owns native typography, button geometry, focus treatment and responsive layout.",
+        "section": "colors"
+      },
+      {
+        "name": "The Snapshot Rule",
+        "body": "Position describes the last panel update, not a running clock, seek control or audio visualization.",
+        "section": "components"
+      }
     ],
     "dos": [
       "Do keep track identity, playback state and actions available as native Discord text and controls.",
-      "Do preserve the local Inter font, original bunny provenance and text-only rendering fallback.",
+      "Do preserve the local Inter font, supplied Raven PNG, source record and text-only rendering fallback.",
+      "Do derive current and next-track metadata from the live player view.",
       "Do label position as a snapshot and represent live streams and unknown durations honestly.",
-      "Do preserve custom Visual Studio templates and existing playback authorization."
+      "Do preserve custom Visual Studio templates and existing playback authorization.",
+      "Do keep Pause/Resume Primary and Stop Danger through Discord's native button styles."
     ],
     "donts": [
-      "Don't paint fake clickable controls into the illustration.",
+      "Don't paint fake clickable controls or static song metadata into the portrait.",
       "Don't claim animation, audio reactivity, realtime position or guaranteed round-trip latency.",
+      "Don't make remote media requests from the local card renderer.",
       "Don't impose raster pixel values on native Discord controls or invent mobile breakpoints.",
+      "Don't restore the removed bunny assets as part of the default player.",
       "Don't promote this scoped listening-room direction into a replacement for the dashboard design system."
     ]
   }
