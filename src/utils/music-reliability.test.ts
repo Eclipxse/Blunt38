@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { raceMusicSources, MusicSearchDeadlineError } from "./fast-music-search.js";
-import { friendlyPlaybackFailure, MusicRecoveryJobs } from "./music-recovery.js";
+import { friendlyPlaybackFailure, musicRecoveryPosition, MusicRecoveryJobs } from "./music-recovery.js";
 import { getCachedYoutubeAudio, invalidateCachedYoutubeAudio, resolveYoutubeAudio, youtubeVideoId } from "../services/youtube-resolver.js";
 
 function deferred<T>() {
@@ -175,4 +175,24 @@ test("Discord failure messages distinguish anti-bot, throttling and timeout with
   assert.match(friendlyPlaybackFailure("Track was stuck for 10000ms"), /did not respond in time/);
   assert.doesNotMatch(friendlyPlaybackFailure("All clients failed. at dev.lavalink.youtube.Client.load secret-url"), /dev\.lavalink|secret-url/);
   assert.doesNotMatch(friendlyPlaybackFailure("unknown private details"), /private details/);
+});
+
+test("recovery resumes the same recording but never seeks alternate or live audio", () => {
+  const failed = { identifier: "song", uri: "https://example.test/song" };
+  const same = { ...failed, isSeekable: true, duration: 180_000 };
+  assert.equal(musicRecoveryPosition(65_000, failed, same), 65_000);
+  assert.equal(musicRecoveryPosition(65_000, failed, { ...same, identifier: "other", uri: "other" }), 0);
+  assert.equal(musicRecoveryPosition(65_000, failed, { ...same, isStream: true }), 0);
+  assert.equal(musicRecoveryPosition(65_000, failed, { ...same, isSeekable: false }), 0);
+  assert.equal(musicRecoveryPosition(NaN, failed, same), 0);
+  assert.equal(musicRecoveryPosition(200_000, failed, same), 179_999);
+});
+
+test("a timed-out recovery source allows the next source to run", async () => {
+  const { withinMusicSearchDeadline } = await import("./fast-music-search.js");
+  const hung = deferred<string>();
+  assert.equal(await withinMusicSearchDeadline(hung.promise, 5).catch(() => null), null);
+  assert.equal(await withinMusicSearchDeadline(Promise.resolve("next source"), 100), "next source");
+  hung.reject(new Error("late failure"));
+  await new Promise((resolve) => setImmediate(resolve));
 });

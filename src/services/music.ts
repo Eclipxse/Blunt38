@@ -42,7 +42,7 @@ import {
   type MusicSearchCandidate,
   type MusicSearchWinner
 } from "../utils/fast-music-search.js";
-import { friendlyPlaybackFailure, MusicRecoveryJobs } from "../utils/music-recovery.js";
+import { friendlyPlaybackFailure, musicRecoveryPosition, MusicRecoveryJobs } from "../utils/music-recovery.js";
 import { palette } from "../utils/ui.js";
 import { getGuildConfig } from "./store.js";
 import { buildVisualAttachment } from "./visual-message.js";
@@ -1364,6 +1364,7 @@ async function recoverPlayback(
   const failedKey = musicTrackKey(failedTrack);
   if (player.getData<string>("musicRecoverySuppressed") === failedKey
     || (player.queue.current && musicTrackKey(player.queue.current) !== failedKey)) return;
+  const resumePosition = player.position;
   const job = recoveryJobs.begin(player, failedKey);
   if (!job) return;
   let expectedKey = job.trackKey;
@@ -1388,7 +1389,7 @@ async function recoverPlayback(
           clientTrack: recovery.track,
           noReplace: false,
           paused: false,
-          position: 0
+          position: musicRecoveryPosition(resumePosition, failedTrack.info, recovery.track.info)
         });
         console.info(
           `[music:recovery] guild=${player.guildId} node=${player.node.id} source=${recovery.source} track=${recovery.track.info.identifier}`
@@ -1522,7 +1523,10 @@ async function findPlaybackRecovery(
     state.attemptedSources.push(source);
     player.setData("musicRecoveryState", state);
 
-    const result = await player.search({ query, source }, failedTrack.requester ?? requester).catch((error) => {
+    const result = await withinMusicSearchDeadline(
+      player.search({ query, source }, failedTrack.requester ?? requester),
+      env.musicSearchRecoveryTimeoutMs
+    ).catch((error) => {
       console.error(
         `[music:recovery-search-error] guild=${player.guildId} source=${source} detail=${playbackFailureDetail(error)}`
       );

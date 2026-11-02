@@ -52,3 +52,17 @@ export function friendlyPlaybackFailure(detail: string) {
   }
   return "The music source could not open this audio stream. Try another track or source. Technical details are in the server logs.";
 }
+
+/** Resume only the same seekable recording; alternate uploads may have different timing. */
+export function musicRecoveryPosition(
+  position: number,
+  failed: { identifier?: string; uri?: string },
+  recovered: { identifier?: string; uri?: string; isSeekable?: boolean; isStream?: boolean; duration?: number }
+) {
+  const same = Boolean(failed.identifier && failed.identifier === recovered.identifier)
+    || Boolean(failed.uri && failed.uri === recovered.uri);
+  if (!same || !recovered.isSeekable || recovered.isStream || !Number.isFinite(position)) return 0;
+  const duration = recovered.duration;
+  if (!duration || !Number.isFinite(duration) || duration <= 0) return 0;
+  return Math.max(0, Math.min(position, duration - 1));
+}
