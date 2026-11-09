@@ -408,30 +408,34 @@ export async function renderBaddieverseWelcomeCard(member: GuildMember, test: bo
   const avatar = await loadRemoteImage(
     member.displayAvatarURL({ extension: "png", size: 256, forceStatic: true })
   );
-  const canvas = createCanvas(840, 460);
+  const width = 840;
+  const height = 460;
+  const scale = 0.5;
+  const canvas = createCanvas(width * scale, height * scale);
   const ctx = canvas.getContext("2d");
-  const centerX = canvas.width / 2;
+  const centerX = width / 2;
+  ctx.scale(scale, scale);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  roundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 34);
+  roundedRect(ctx, 1, 1, width - 2, height - 2, 34);
   const background = ctx.createLinearGradient(0, 0, 640, 460);
-  background.addColorStop(0, "#4e2c51");
-  background.addColorStop(0.55, "#39264b");
-  background.addColorStop(1, "#28233e");
+  background.addColorStop(0, "#305457");
+  background.addColorStop(0.55, "#24474e");
+  background.addColorStop(1, "#20333e");
   ctx.fillStyle = background;
   ctx.fill();
-  ctx.strokeStyle = "#735678";
+  ctx.strokeStyle = "#68888b";
   ctx.lineWidth = 2;
   ctx.stroke();
 
   const photo = { x: centerX - 64, y: 48, width: 128, height: 128 };
   ctx.beginPath();
   ctx.arc(centerX, 112, 74, 0, Math.PI * 2);
-  ctx.shadowColor = "rgba(20, 10, 30, 0.45)";
+  ctx.shadowColor = "rgba(12, 23, 31, 0.45)";
   ctx.shadowBlur = 24;
   ctx.shadowOffsetY = 8;
-  ctx.fillStyle = "#9676ab";
+  ctx.fillStyle = "#82a9a7";
   ctx.fill();
   ctx.shadowColor = "transparent";
 
@@ -458,7 +462,7 @@ export async function renderBaddieverseWelcomeCard(member: GuildMember, test: bo
   ctx.fillStyle = "#7f346a";
   ctx.fill();
 
-  ctx.fillStyle = "#d5a9ed";
+  ctx.fillStyle = "#b7dfd3";
   for (const [x, y, size] of [[306, 128, 10], [527, 76, 14]]) {
     ctx.beginPath();
     ctx.moveTo(x, y - size);
@@ -476,21 +480,21 @@ export async function renderBaddieverseWelcomeCard(member: GuildMember, test: bo
   const measuredWidth = ctx.measureText(greeting).width;
   const greetingSize = Math.max(32, Math.min(58, Math.floor(58 * greetingWidth / measuredWidth)));
   ctx.font = `700 ${greetingSize}px "Inter"`;
-  ctx.fillStyle = "#fff2fa";
+  ctx.fillStyle = "#f6fffc";
   ctx.fillText(greeting, centerX, 238, greetingWidth);
   ctx.letterSpacing = "0px";
 
   ctx.font = '600 32px "Inter"';
-  ctx.fillStyle = "#e5c1f7";
+  ctx.fillStyle = "#c3ecdf";
   ctx.fillText(`Welcome to ${member.guild.name}`, centerX, 300, 728);
 
   ctx.font = '26px "Inter"';
-  ctx.fillStyle = "#dfcfe9";
+  ctx.fillStyle = "#d3e6e6";
   ctx.fillText("Say hi, read the rules, and find your duo.", centerX, 347);
 
   const count = member.guild.memberCount.toLocaleString("en-US");
   ctx.font = '600 22px "Inter"';
-  ctx.fillStyle = "#cbb3dd";
+  ctx.fillStyle = "#b5d1d3";
   ctx.fillText(test ? "Welcome preview" : `${count} members`, centerX, 410);
 
   return canvas.toBuffer("image/png");
