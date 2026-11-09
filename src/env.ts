@@ -67,6 +67,7 @@ export const env = {
   musicSearchSource: process.env.MUSIC_SEARCH_SOURCE?.trim() || "ytsearch",
   musicDefaultVolume: Number.isFinite(musicDefaultVolume) ? Math.max(1, Math.min(100, musicDefaultVolume)) : 80,
   musicYtDlpEnabled: process.env.MUSIC_YTDLP_ENABLED === "true",
+  musicPreferDirectYoutube: process.env.MUSIC_PREFER_DIRECT_YOUTUBE === "true",
   musicYtDlpPath: process.env.MUSIC_YTDLP_PATH?.trim() || "yt-dlp",
   musicYtDlpTimeoutMs: Number.isFinite(musicYtDlpTimeoutMs)
     ? Math.max(5000, Math.min(60000, musicYtDlpTimeoutMs))

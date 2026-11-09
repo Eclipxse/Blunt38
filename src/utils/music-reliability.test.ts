@@ -33,6 +33,32 @@ test("a primary failure does not reject a pending successful fallback", async ()
   assert.equal(result.value, "video");
 });
 
+test("the preferred audio source can beat an already resolved native track", async () => {
+  let calls = 0;
+  const direct = deferred<string>();
+  const result = raceMusicSources([
+    { sourceLabel: "native", run: async () => "native-video" },
+    { sourceLabel: "direct", run: () => { calls++; return direct.promise; } }
+  ], Boolean, 100, 100, undefined, { sourceLabel: "direct", timeoutMs: 100 });
+  await new Promise((resolve) => setImmediate(resolve));
+  direct.resolve("direct-audio");
+  assert.equal((await result).value, "direct-audio");
+  assert.equal(calls, 1);
+});
+
+test("an unavailable or slow preferred audio source still allows native playback", async () => {
+  for (const preferred of [
+    async () => { throw new Error("direct source unavailable"); },
+    () => new Promise<string>(() => {})
+  ]) {
+    const result = await raceMusicSources([
+      { sourceLabel: "native", run: async () => "native-video" },
+      { sourceLabel: "direct", run: preferred }
+    ], Boolean, 100, 100, undefined, { sourceLabel: "direct", timeoutMs: 5 });
+    assert.equal(result.value, "native-video");
+  }
+});
+
 test("wrong-video candidates cannot win the exact-link race", async () => {
   const result = await raceMusicSources([
     { sourceLabel: "wrong", run: async () => "different-id" },

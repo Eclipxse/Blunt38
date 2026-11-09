@@ -36,6 +36,7 @@ import {
   firstSuccessfulMusicPromise,
   musicSearchResultCacheTtl,
   MusicSearchDeadlineError,
+  preferMusicResult,
   raceMusicSources,
   TtlLruCache,
   withinMusicSearchDeadline,
@@ -630,9 +631,25 @@ async function resolveStandardPlayback(
     return musicPlayResult(result, `cache/${cached.sourceLabel}`);
   }
 
-  const winner = typeof searchQuery === "string"
+  let winner = typeof searchQuery === "string"
     ? await resolveDirectUrlPlayback(player, query, requester, allowYtDlpFallback)
     : await resolveTextPlayback(player, query, requester);
+  const firstTrack = winner.value.tracks[0];
+  const trackUrl = firstTrack?.info.uri;
+  if (typeof searchQuery !== "string"
+    && env.musicYtDlpEnabled
+    && env.musicPreferDirectYoutube
+    && !firstTrack?.info.isStream
+    && trackUrl && youtubeVideoId(trackUrl)) {
+    winner = await preferMusicResult(
+      firstAcceptableMusicResult([{
+        sourceLabel: "yt-dlp fallback",
+        run: () => searchYoutubeWithYtDlp(player, trackUrl, requester)
+      }], hasMusicTracks),
+      Promise.resolve(winner),
+      Math.min(18_000, env.musicYtDlpTimeoutMs)
+    );
+  }
   const result = winner.value;
 
   const cacheTtlMs = musicSearchResultCacheTtl(
@@ -723,7 +740,10 @@ async function resolveDirectUrlPlayback(
     allowYtDlpFallback && expectedYoutubeId
       ? Math.max(env.musicSearchRecoveryTimeoutMs, env.musicYtDlpTimeoutMs)
       : env.musicSearchRecoveryTimeoutMs,
-    () => console.warn(`[music:direct-recovery] reason=fast-deadline ytDlp=${allowYtDlpFallback && expectedYoutubeId ? "enabled" : "disabled"}`)
+    () => console.warn(`[music:direct-recovery] reason=fast-deadline ytDlp=${allowYtDlpFallback && expectedYoutubeId ? "enabled" : "disabled"}`),
+    env.musicPreferDirectYoutube && allowYtDlpFallback && expectedYoutubeId && !new URL(query).searchParams.has("list")
+      ? { sourceLabel: "yt-dlp fallback", timeoutMs: Math.min(18_000, env.musicYtDlpTimeoutMs) }
+      : undefined
   );
   return preferExactYoutubeTrack(winner, expectedYoutubeId);
 }

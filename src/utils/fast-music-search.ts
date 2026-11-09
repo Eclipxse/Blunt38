@@ -25,11 +25,30 @@ export function firstAcceptableMusicResult<T>(
 ): Promise<MusicSearchWinner<T>> {
   if (!candidates.length) return Promise.reject(new Error("No music search candidates were provided."));
 
-  return firstSuccessfulMusicPromise(candidates.map(async (candidate) => {
-    const value = await candidate.run();
-    if (!accepts(value)) throw new Error(`${candidate.sourceLabel} returned no acceptable tracks.`);
-    return { sourceLabel: candidate.sourceLabel, value };
-  }));
+  return firstSuccessfulMusicPromise(candidates.map((candidate) => acceptableMusicResult(candidate, accepts)));
+}
+
+async function acceptableMusicResult<T>(
+  candidate: MusicSearchCandidate<T>,
+  accepts: (value: T) => boolean
+): Promise<MusicSearchWinner<T>> {
+  const value = await candidate.run();
+  if (!accepts(value)) throw new Error(`${candidate.sourceLabel} returned no acceptable tracks.`);
+  return { sourceLabel: candidate.sourceLabel, value };
+}
+
+export async function preferMusicResult<T>(
+  preferred: Promise<T>,
+  fallback: Promise<T>,
+  timeoutMs: number
+): Promise<T> {
+  // The fallback is already running and can fail before the preference expires.
+  void fallback.catch(() => undefined);
+  try {
+    return await withinMusicSearchDeadline(preferred, timeoutMs);
+  } catch {
+    return fallback;
+  }
 }
 
 export async function firstSuccessfulMusicPromise<T>(promises: readonly Promise<T>[]): Promise<T> {
@@ -49,9 +68,23 @@ export async function raceMusicSources<T>(
   accepts: (value: T) => boolean,
   fastTimeoutMs: number,
   recoveryTimeoutMs: number,
-  onSlow: () => void = () => {}
+  onSlow: () => void = () => {},
+  preference?: { sourceLabel: string; timeoutMs: number }
 ): Promise<MusicSearchWinner<T>> {
-  const race = firstAcceptableMusicResult(candidates, accepts);
+  if (!candidates.length) throw new Error("No music search candidates were provided.");
+  const pending = candidates.map((candidate) => acceptableMusicResult(candidate, accepts));
+  const race = firstSuccessfulMusicPromise(pending);
+  const fallback = waitForMusicRace(race, fastTimeoutMs, recoveryTimeoutMs, onSlow);
+  const preferred = preference && pending[candidates.findIndex((candidate) => candidate.sourceLabel === preference.sourceLabel)];
+  return preferred && preference ? preferMusicResult(preferred, fallback, preference.timeoutMs) : fallback;
+}
+
+async function waitForMusicRace<T>(
+  race: Promise<T>,
+  fastTimeoutMs: number,
+  recoveryTimeoutMs: number,
+  onSlow: () => void
+) {
   try {
     return await withinMusicSearchDeadline(race, fastTimeoutMs);
   } catch (error) {
