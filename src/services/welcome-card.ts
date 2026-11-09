@@ -408,75 +408,90 @@ export async function renderBaddieverseWelcomeCard(member: GuildMember, test: bo
   const avatar = await loadRemoteImage(
     member.displayAvatarURL({ extension: "png", size: 256, forceStatic: true })
   );
-  const canvas = createCanvas(880, 400);
+  const canvas = createCanvas(840, 460);
   const ctx = canvas.getContext("2d");
-  const paper = "#faf4e8";
-  const ink = "#282019";
-  const stub = "#f0c9ce";
-  const rule = "#99797d";
-  const seam = 618;
+  const centerX = canvas.width / 2;
+  ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  roundedRect(ctx, 1, 1, 878, 398, 16);
-  ctx.save();
-  ctx.clip();
-  ctx.fillStyle = paper;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = stub;
-  ctx.fillRect(seam, 0, canvas.width - seam, canvas.height);
-
-  ctx.strokeStyle = rule;
+  roundedRect(ctx, 1, 1, canvas.width - 2, canvas.height - 2, 34);
+  const background = ctx.createLinearGradient(0, 0, 640, 460);
+  background.addColorStop(0, "#fff2f5");
+  background.addColorStop(0.55, "#fbf7ff");
+  background.addColorStop(1, "#eae4ff");
+  ctx.fillStyle = background;
+  ctx.fill();
+  ctx.strokeStyle = "#e7d9f2";
   ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(40, 314);
-  ctx.lineTo(580, 314);
   ctx.stroke();
 
-  ctx.setLineDash([6, 8]);
+  const photo = { x: centerX - 64, y: 48, width: 128, height: 128 };
   ctx.beginPath();
-  ctx.moveTo(seam, 14);
-  ctx.lineTo(seam, 386);
-  ctx.stroke();
-  ctx.setLineDash([]);
+  ctx.arc(centerX, 112, 74, 0, Math.PI * 2);
+  ctx.shadowColor = "rgba(91, 64, 137, 0.22)";
+  ctx.shadowBlur = 24;
+  ctx.shadowOffsetY = 8;
+  ctx.fillStyle = "#fffaff";
+  ctx.fill();
+  ctx.shadowColor = "transparent";
 
-  ctx.fillStyle = ink;
-  ctx.font = '29px "Nunito"';
-  ctx.fillText("Welcome to", 41, 62);
-  ctx.font = '82px "DM Serif Display"';
-  ctx.fillText(member.guild.name, 38, 129, 542);
-
-  ctx.font = '700 35px "Nunito"';
-  ctx.fillText(`Hey, ${member.displayName}!`, 41, 214, 539);
-  ctx.font = '28px "Nunito"';
-  ctx.fillText("Say hi, read the rules, find your duo.", 41, 265, 539);
-
-  const count = member.guild.memberCount.toLocaleString("en-US");
-  ctx.font = '700 23px "Nunito"';
-  ctx.fillText("blunt38", 41, 355);
-  ctx.textAlign = "right";
-  ctx.fillText(test ? "Welcome preview" : `${count} members`, 580, 355);
-  ctx.textAlign = "center";
-
-  const photo = { x: 654, y: 81, width: 190, height: 190 };
   ctx.save();
-  roundedRect(ctx, photo.x, photo.y, photo.width, photo.height, 9);
+  ctx.beginPath();
+  ctx.arc(centerX, 112, 64, 0, Math.PI * 2);
   ctx.clip();
+  ctx.fillStyle = "#e6daf8";
+  ctx.fillRect(photo.x, photo.y, photo.width, photo.height);
   drawImageFit(ctx, avatar, photo, "cover");
   ctx.restore();
 
-  ctx.strokeStyle = ink;
-  roundedRect(ctx, photo.x - 6, photo.y - 6, photo.width + 12, photo.height + 12, 13);
+  ctx.beginPath();
+  ctx.arc(477, 158, 24, 0, Math.PI * 2);
+  ctx.fillStyle = "#fff3fa";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#ffffff";
   ctx.stroke();
-  ctx.fillText("Player pass", 749, 320);
-  ctx.restore();
+  ctx.beginPath();
+  ctx.moveTo(477, 168);
+  ctx.bezierCurveTo(453, 153, 470, 145, 477, 154);
+  ctx.bezierCurveTo(484, 145, 501, 153, 477, 168);
+  ctx.fillStyle = "#a44b83";
+  ctx.fill();
 
-  ctx.globalCompositeOperation = "destination-out";
-  ctx.beginPath();
-  ctx.arc(seam, 0, 12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(seam, 400, 12, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = "#9b75bb";
+  for (const [x, y, size] of [[306, 128, 10], [527, 76, 14]]) {
+    ctx.beginPath();
+    ctx.moveTo(x, y - size);
+    ctx.quadraticCurveTo(x + 2, y - 2, x + size, y);
+    ctx.quadraticCurveTo(x + 2, y + 2, x, y + size);
+    ctx.quadraticCurveTo(x - 2, y + 2, x - size, y);
+    ctx.quadraticCurveTo(x - 2, y - 2, x, y - size);
+    ctx.fill();
+  }
+
+  const greeting = `Hey, ${member.displayName}!`;
+  const greetingWidth = 728;
+  ctx.font = '700 58px "Inter"';
+  ctx.letterSpacing = "-1.1px";
+  const measuredWidth = ctx.measureText(greeting).width;
+  const greetingSize = Math.max(32, Math.min(58, Math.floor(58 * greetingWidth / measuredWidth)));
+  ctx.font = `700 ${greetingSize}px "Inter"`;
+  ctx.fillStyle = "#30203e";
+  ctx.fillText(greeting, centerX, 238, greetingWidth);
+  ctx.letterSpacing = "0px";
+
+  ctx.font = '600 32px "Inter"';
+  ctx.fillStyle = "#563975";
+  ctx.fillText(`Welcome to ${member.guild.name}`, centerX, 300, 728);
+
+  ctx.font = '26px "Inter"';
+  ctx.fillStyle = "#544563";
+  ctx.fillText("Say hi, read the rules, and find your duo.", centerX, 347);
+
+  const count = member.guild.memberCount.toLocaleString("en-US");
+  ctx.font = '600 22px "Inter"';
+  ctx.fillStyle = "#614a77";
+  ctx.fillText(test ? "Welcome preview" : `${count} members`, centerX, 410);
 
   return canvas.toBuffer("image/png");
 }
