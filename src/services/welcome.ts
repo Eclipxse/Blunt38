@@ -1,6 +1,6 @@
 import { AttachmentBuilder, EmbedBuilder, type GuildMember, type MessageCreateOptions } from "discord.js";
 import { getActiveVisualTemplate } from "./visual-templates.js";
-import { renderBlushWelcomeCard, renderWelcomeCard } from "./welcome-card.js";
+import { renderBaddieverseWelcomeCard, renderWelcomeCard } from "./welcome-card.js";
 
 export function renderWelcomeText(
   template: string | undefined,
@@ -40,14 +40,14 @@ export async function buildWelcomeMessage(
 
   if (member.guild.name.toLowerCase() === "baddieverse") {
     try {
-      const image = await renderBlushWelcomeCard(member, test);
+      const image = await renderBaddieverseWelcomeCard(member, test);
       return {
         content: messageTemplate
           ? renderWelcomeText(messageTemplate, member)
           : `Welcome ${member} to **${member.guild.name}**! ♡`,
         files: [new AttachmentBuilder(image, {
           name: "baddieverse-welcome.png",
-          description: "Welcome to Baddieverse! Peek at the rules, say hi, and find your next duo."
+          description: "Welcome to Baddieverse! Say hi, read the rules, and find your duo."
         })],
         allowedMentions: { users: test ? [] : [member.id] }
       };

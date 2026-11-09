@@ -404,78 +404,79 @@ export async function renderVisualCard(
   return canvas.toBuffer("image/png");
 }
 
-function drawHeart(ctx: SKRSContext2D, x: number, y: number, size: number) {
-  ctx.beginPath();
-  ctx.moveTo(x, y + size * 0.48);
-  ctx.bezierCurveTo(x - size, y - size * 0.16, x - size * 0.35, y - size * 0.7, x, y - size * 0.25);
-  ctx.bezierCurveTo(x + size * 0.35, y - size * 0.7, x + size, y - size * 0.16, x, y + size * 0.48);
-  ctx.fill();
-}
-
-export async function renderBlushWelcomeCard(member: GuildMember, test: boolean) {
-  const portrait = await loadImage(resolve(studioFontDirectory, "../../../assets/baddieverse-welcome.png"));
-  const canvas = createCanvas(920, 420);
+export async function renderBaddieverseWelcomeCard(member: GuildMember, test: boolean) {
+  const avatar = await loadRemoteImage(
+    member.displayAvatarURL({ extension: "png", size: 256, forceStatic: true })
+  );
+  const canvas = createCanvas(880, 400);
   const ctx = canvas.getContext("2d");
+  const paper = "#faf4e8";
+  const ink = "#282019";
+  const stub = "#f0c9ce";
+  const rule = "#99797d";
+  const seam = 618;
   ctx.textBaseline = "middle";
 
-  roundedRect(ctx, 3, 3, 914, 414, 25);
-  ctx.fillStyle = gradientFromCss(ctx, "linear-gradient(120deg, #281f29, #4b2b3b)", 920, 420);
-  ctx.fill();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = "#80566a";
-  ctx.stroke();
-
-  roundedRect(ctx, 8, 36, 6, 348, 3);
-  ctx.fillStyle = "#f1a8bf";
-  ctx.fill();
-
-  ctx.save();
-  ctx.translate(53, 59);
-  ctx.rotate(Math.PI / 4);
-  ctx.fillRect(-4, -4, 8, 8);
-  ctx.restore();
-  ctx.font = '700 21px "Nunito"';
-  ctx.fillText("P L A Y E R   J O I N E D", 70, 59);
-  ctx.font = 'italic 60px "Cormorant Garamond"';
-  ctx.fillStyle = "#fff3f8";
-  ctx.fillText("Welcome to", 43, 121);
-  ctx.fillText(`${member.guild.name}!`, 43, 184, 530);
-
-  ctx.font = '700 28px "Nunito"';
-  ctx.fillStyle = "#ffd3e4";
-  ctx.fillText(`Hey ${member.displayName}, come get cozy.`, 47, 253, 530);
-  ctx.font = '24px "Nunito"';
-  ctx.fillStyle = "#ebd8e4";
-  ctx.fillText("Peek at the rules, say hi,", 47, 295);
-  ctx.fillText("and find your next duo.", 47, 326);
-
-  const count = member.guild.memberCount.toLocaleString("en-US");
-  const footer = test ? "Welcome preview" : `${count} members in the party`;
-  ctx.font = '700 20px "Nunito"';
-  roundedRect(ctx, 46, 354, ctx.measureText(footer).width + 54, 39, 19);
-  ctx.fillStyle = "#563549";
-  ctx.fill();
-  ctx.fillStyle = "#ffd3e4";
-  drawHeart(ctx, 68, 374, 12);
-  ctx.fillText(footer, 84, 374);
-
-  const photo = { x: 611, y: 75, width: 254, height: 254 };
-  roundedRect(ctx, photo.x, photo.y, photo.width, photo.height, 34);
+  roundedRect(ctx, 1, 1, 878, 398, 16);
   ctx.save();
   ctx.clip();
-  drawImageFit(ctx, portrait, photo, "cover");
-  ctx.restore();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = "#edb1c6";
+  ctx.fillStyle = paper;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = stub;
+  ctx.fillRect(seam, 0, canvas.width - seam, canvas.height);
+
+  ctx.strokeStyle = rule;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(40, 314);
+  ctx.lineTo(580, 314);
   ctx.stroke();
 
-  roundedRect(ctx, 827, 290, 61, 61, 30);
-  ctx.fillStyle = "#ffc9db";
-  ctx.fill();
-  ctx.strokeStyle = "#392735";
+  ctx.setLineDash([6, 8]);
+  ctx.beginPath();
+  ctx.moveTo(seam, 14);
+  ctx.lineTo(seam, 386);
   ctx.stroke();
-  ctx.fillStyle = "#713e58";
-  drawHeart(ctx, 857, 320, 23);
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = ink;
+  ctx.font = '29px "Nunito"';
+  ctx.fillText("Welcome to", 41, 62);
+  ctx.font = '82px "DM Serif Display"';
+  ctx.fillText(member.guild.name, 38, 129, 542);
+
+  ctx.font = '700 35px "Nunito"';
+  ctx.fillText(`Hey, ${member.displayName}!`, 41, 214, 539);
+  ctx.font = '28px "Nunito"';
+  ctx.fillText("Say hi, read the rules, find your duo.", 41, 265, 539);
+
+  const count = member.guild.memberCount.toLocaleString("en-US");
+  ctx.font = '700 23px "Nunito"';
+  ctx.fillText("blunt38", 41, 355);
+  ctx.textAlign = "right";
+  ctx.fillText(test ? "Welcome preview" : `${count} members`, 580, 355);
+  ctx.textAlign = "center";
+
+  const photo = { x: 654, y: 81, width: 190, height: 190 };
+  ctx.save();
+  roundedRect(ctx, photo.x, photo.y, photo.width, photo.height, 9);
+  ctx.clip();
+  drawImageFit(ctx, avatar, photo, "cover");
+  ctx.restore();
+
+  ctx.strokeStyle = ink;
+  roundedRect(ctx, photo.x - 6, photo.y - 6, photo.width + 12, photo.height + 12, 13);
+  ctx.stroke();
+  ctx.fillText("Player pass", 749, 320);
+  ctx.restore();
+
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(seam, 0, 12, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(seam, 400, 12, 0, Math.PI * 2);
+  ctx.fill();
 
   return canvas.toBuffer("image/png");
 }

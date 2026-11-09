@@ -47,15 +47,16 @@ export const welcomeCommand: Command = {
       return;
     }
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const config = await getGuildConfig(interaction.guildId);
     if (!config.welcomeChannelId) {
-      await interaction.reply({ content: "Set a welcome channel first with `/welcome set`.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "Set a welcome channel first with `/welcome set`." });
       return;
     }
 
     const channel = await interaction.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
     if (!channel?.isTextBased() || channel.isDMBased()) {
-      await interaction.reply({ content: "The saved welcome channel is invalid.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "The saved welcome channel is invalid." });
       return;
     }
 
@@ -63,6 +64,6 @@ export const welcomeCommand: Command = {
     await channel.send(
       await buildWelcomeMessage(member, config.welcomeMessage, config.accentColor, true)
     );
-    await interaction.reply({ content: `Sent a test welcome in ${channel}.`, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `Sent a test welcome in ${channel}.` });
   }
 };
