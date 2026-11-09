@@ -404,6 +404,82 @@ export async function renderVisualCard(
   return canvas.toBuffer("image/png");
 }
 
+function drawHeart(ctx: SKRSContext2D, x: number, y: number, size: number) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + size * 0.48);
+  ctx.bezierCurveTo(x - size, y - size * 0.16, x - size * 0.35, y - size * 0.7, x, y - size * 0.25);
+  ctx.bezierCurveTo(x + size * 0.35, y - size * 0.7, x + size, y - size * 0.16, x, y + size * 0.48);
+  ctx.fill();
+}
+
+export async function renderBlushWelcomeCard(member: GuildMember, test: boolean) {
+  const portrait = await loadImage(resolve(studioFontDirectory, "../../../assets/baddieverse-welcome.png"));
+  const canvas = createCanvas(920, 420);
+  const ctx = canvas.getContext("2d");
+  ctx.textBaseline = "middle";
+
+  roundedRect(ctx, 3, 3, 914, 414, 25);
+  ctx.fillStyle = gradientFromCss(ctx, "linear-gradient(120deg, #281f29, #4b2b3b)", 920, 420);
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = "#80566a";
+  ctx.stroke();
+
+  roundedRect(ctx, 8, 36, 6, 348, 3);
+  ctx.fillStyle = "#f1a8bf";
+  ctx.fill();
+
+  ctx.save();
+  ctx.translate(53, 59);
+  ctx.rotate(Math.PI / 4);
+  ctx.fillRect(-4, -4, 8, 8);
+  ctx.restore();
+  ctx.font = '700 21px "Nunito"';
+  ctx.fillText("P L A Y E R   J O I N E D", 70, 59);
+  ctx.font = 'italic 60px "Cormorant Garamond"';
+  ctx.fillStyle = "#fff3f8";
+  ctx.fillText("Welcome to", 43, 121);
+  ctx.fillText(`${member.guild.name}!`, 43, 184, 530);
+
+  ctx.font = '700 28px "Nunito"';
+  ctx.fillStyle = "#ffd3e4";
+  ctx.fillText(`Hey ${member.displayName}, come get cozy.`, 47, 253, 530);
+  ctx.font = '24px "Nunito"';
+  ctx.fillStyle = "#ebd8e4";
+  ctx.fillText("Peek at the rules, say hi,", 47, 295);
+  ctx.fillText("and find your next duo.", 47, 326);
+
+  const count = member.guild.memberCount.toLocaleString("en-US");
+  const footer = test ? "Welcome preview" : `${count} members in the party`;
+  ctx.font = '700 20px "Nunito"';
+  roundedRect(ctx, 46, 354, ctx.measureText(footer).width + 54, 39, 19);
+  ctx.fillStyle = "#563549";
+  ctx.fill();
+  ctx.fillStyle = "#ffd3e4";
+  drawHeart(ctx, 68, 374, 12);
+  ctx.fillText(footer, 84, 374);
+
+  const photo = { x: 611, y: 75, width: 254, height: 254 };
+  roundedRect(ctx, photo.x, photo.y, photo.width, photo.height, 34);
+  ctx.save();
+  ctx.clip();
+  drawImageFit(ctx, portrait, photo, "cover");
+  ctx.restore();
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = "#edb1c6";
+  ctx.stroke();
+
+  roundedRect(ctx, 827, 290, 61, 61, 30);
+  ctx.fillStyle = "#ffc9db";
+  ctx.fill();
+  ctx.strokeStyle = "#392735";
+  ctx.stroke();
+  ctx.fillStyle = "#713e58";
+  drawHeart(ctx, 857, 320, 23);
+
+  return canvas.toBuffer("image/png");
+}
+
 export async function renderWelcomeCard(
   document: VisualDocument,
   context: { member: GuildMember; inviter?: User | null }
