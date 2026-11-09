@@ -148,6 +148,11 @@ const maxPlaybackRecoveryAttempts = 2;
 const musicIdleDisconnectMs = 5 * 60_000;
 const standardPlaybackCache = new TtlLruCache<CachedStandardPlayback>(env.musicSearchCacheMax);
 const recoveryJobs = new MusicRecoveryJobs();
+const preparedYoutubeRecovery = new WeakMap<Player, {
+  videoId: string;
+  result: Promise<MusicSearchResult | null>;
+}>();
+let preparingYoutubeRecovery = false;
 
 const lavalinkUnavailableMessage =
   "Lavalink is not ready right now. Start/restart Lavalink and wait until /v4/info responds. The bot will attach automatically when the node is healthy.";
@@ -568,7 +573,11 @@ async function playInput(
 
     player.setData("musicPanelPending", panelPromise);
     player.setData("musicRequestStartedAt", startedAt);
-    const [playResult] = await Promise.allSettled([startMusicPlayback(player), panelPromise]);
+    const playback = startMusicPlayback(player);
+    if (resolved.result.loadType !== "playlist" && tracks.length === 1) {
+      prepareYoutubeRecovery(player, first, context.user);
+    }
+    const [playResult] = await Promise.allSettled([playback, panelPromise]);
     if (player.getData<Promise<void>>("musicPanelPending") === panelPromise) {
       player.deleteData("musicPanelPending");
     }
@@ -1450,6 +1459,7 @@ function musicEventHandler<Args extends unknown[]>(event: string, handler: (...a
 }
 
 export function cancelMusicRecovery(player: Player) {
+  preparedYoutubeRecovery.delete(player);
   const suppressedKey = player.queue.current ? musicTrackKey(player.queue.current)
     : player.getData<MusicPlaybackFailure>("musicLastPlaybackFailure")?.identifier ?? "";
   recoveryJobs.cancel(player);
@@ -1509,12 +1519,15 @@ async function findPlaybackRecovery(
 
     try {
       const exactTarget = failedTrack.info.uri?.startsWith("http") ? failedTrack.info.uri : undefined;
-      const result = await searchYoutubeWithYtDlp(
-        player,
-        query,
-        requester,
-        exactTarget
-      );
+      const prepared = preparedYoutubeRecovery.get(player);
+      const usePrepared = exactTarget && prepared && prepared.videoId === youtubeVideoId(exactTarget);
+      if (usePrepared) preparedYoutubeRecovery.delete(player);
+      const ready = usePrepared ? await prepared.result : null;
+      if (!isCurrent()) return null;
+      const expiry = Number(ready?.tracks[0]?.userData?.blunt38StreamExpiresAt ?? 0);
+      const result = ready && expiry > Date.now() + 5_000
+        ? ready
+        : await searchYoutubeWithYtDlp(player, query, requester, exactTarget);
       if (!isCurrent()) return null;
       const candidate = result.tracks[0];
       if (candidate) {
@@ -1608,6 +1621,21 @@ function invalidateFailedStream(track: MusicTrack | null) {
   invalidateCachedYoutubeAudio(uri);
   const key = standardPlaybackCacheKey(uri);
   if (key) standardPlaybackCache.delete(key);
+}
+
+function prepareYoutubeRecovery(player: Player, track: MusicTrack, requester: User) {
+  if (!env.musicWarmYoutubeRecovery || !env.musicYtDlpEnabled || preparingYoutubeRecovery
+    || track.info.isStream || track.userData?.blunt38Resolver === "yt-dlp") return;
+  const url = track.info.uri;
+  const videoId = url ? youtubeVideoId(url) : null;
+  if (!url || !videoId || preparedYoutubeRecovery.get(player)?.videoId === videoId) return;
+
+  // Never delay native playback or run more than one speculative lookup at a time.
+  preparingYoutubeRecovery = true;
+  const result = searchYoutubeWithYtDlp(player, url, requester)
+    .catch(() => null)
+    .finally(() => { preparingYoutubeRecovery = false; });
+  preparedYoutubeRecovery.set(player, { videoId, result });
 }
 
 async function searchYoutubeWithYtDlp(player: Player, query: string, requester: User, exactTarget?: string) {
