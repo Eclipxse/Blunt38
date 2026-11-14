@@ -28,12 +28,12 @@ export function summarizeMusicLogs(raw) {
   for (const line of raw.split(/\r?\n/)) {
     const category = failureCategory(line);
     if (category) failures[category] = (failures[category] ?? 0) + 1;
-    const event = line.match(/\[music:(play|track-start|search|ytdlp|track-error|track-stuck|search-error|recovery|recovery-ytdlp-error|event-error|connect-error)\]/)?.[1];
+    const event = line.match(/\[music:(play|track-start|search|ytdlp|track-error|track-stuck|search-error|recovery|recovery-ytdlp-error|event-error|connect-error|health)\]/)?.[1];
     if (!event) continue;
     const record = { event };
     const timestamp = line.match(/\b\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?/)?.[0];
     if (timestamp) record.time = timestamp;
-    for (const name of ["setup", "connect", "search", "panel", "command", "ready", "lookup", "resolve", "total", "elapsed", "after"]) {
+    for (const name of ["setup", "connect", "search", "panel", "command", "ready", "lookup", "resolve", "total", "elapsed", "after", "gateway", "eventLoopP99"]) {
       const value = line.match(new RegExp(`\\b${name}=(\\d{1,8})ms\\b`))?.[1];
       if (value) record[`${name}Ms`] = Number(value);
     }
@@ -79,36 +79,42 @@ async function main() {
   }
   const diskEnv = dotenv.parse(await readFile(resolve(root, ".env")).catch(() => ""));
   const settings = { ...process.env, ...diskEnv };
-  const [revision, pm2Json, service, journal, ipv6, ytVersion] = await Promise.all([
+  const [revision, pm2Json, service, journal, ipv6, ytVersion, botService, botJournal, botRestarts] = await Promise.all([
     command("git", ["rev-parse", "--short", "HEAD"]),
     command("pm2", ["jlist"]),
     command("systemctl", ["is-active", "lavalink"]),
     command("journalctl", ["-u", "lavalink", "--since", "10 minutes ago", "-n", "160", "--no-pager", "-o", "short-iso"]),
     command("ip", ["-6", "route", "show", "default"]),
-    command(settings.MUSIC_YTDLP_PATH?.trim() || "yt-dlp", ["--ignore-config", "--version"])
+    command(settings.MUSIC_YTDLP_PATH?.trim() || "yt-dlp", ["--ignore-config", "--version"]),
+    command("systemctl", ["is-active", "blunt38"]),
+    command("journalctl", ["-u", "blunt38", "--since", "30 minutes ago", "-n", "400", "--no-pager", "-o", "short-iso"]),
+    command("systemctl", ["show", "blunt38", "-p", "NRestarts", "--value"])
   ]);
   let processInfo;
   try { processInfo = JSON.parse(pm2Json ?? "[]").find((item) => item.name === "blunt38-bot"); } catch {}
   const pm = processInfo?.pm2_env;
   const botLogs = await Promise.all([tail(pm?.pm_out_log_path), tail(pm?.pm_err_log_path)]);
   const family = settings.MUSIC_YTDLP_IP_FAMILY ?? "auto";
-  const status = pm?.status;
+  const systemdActive = botService?.trim() === "active";
+  const status = systemdActive ? "online" : pm?.status;
   const report = {
     capturedAt: new Date().toISOString(),
     commit: /^[a-f0-9]{7,40}$/i.test(revision?.trim() ?? "") ? revision.trim() : "unavailable",
     node: process.version,
     botStatus: ["online", "stopped", "errored", "launching", "stopping"].includes(status) ? status : "unavailable",
-    restartCount: Number.isSafeInteger(pm?.restart_time) ? pm.restart_time : null,
+    processManager: systemdActive ? "systemd" : pm ? "pm2" : "unavailable",
+    restartCount: systemdActive && /^\d+$/.test(botRestarts?.trim() ?? "")
+      ? Number(botRestarts.trim()) : Number.isSafeInteger(pm?.restart_time) ? pm.restart_time : null,
     lavalinkService: service?.trim() === "active" ? "active" : "not-active-or-unavailable",
     ipv6DefaultRoute: ipv6 === null ? "unavailable" : /\bdefault\b/.test(ipv6),
     ytDlpVersion: /^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(?:[.\w-]*)?$/.test(ytVersion?.trim() ?? "") ? ytVersion.trim() : "unavailable",
     configuredIpFamily: ["auto", "ipv4", "ipv6"].includes(family) ? family : "invalid",
     ytDlpEnabledInConfig: settings.MUSIC_YTDLP_ENABLED === "true",
-    botStdout: summarizeMusicLogs(botLogs[0]),
+    botStdout: summarizeMusicLogs(systemdActive ? botJournal ?? "" : botLogs[0]),
     botStderr: summarizeMusicLogs(botLogs[1]),
     lavalinkLogsAvailable: journal !== null,
     lavalinkLogs: summarizeMusicLogs(journal ?? ""),
-    note: "Bot events are the last 200 lines per log, not necessarily recent or in chronological order. Lavalink covers the last 10 minutes. Failure counts are log lines, not unique failed songs. This does not verify audible playback."
+    note: "Systemd bot events cover up to 400 lines from the last 30 minutes; PM2 uses the last 200 lines per log. Lavalink covers the last 10 minutes. Failure counts are log lines, not unique failed songs. This does not verify audible playback."
   };
   console.log(JSON.stringify(report, null, 2));
 }

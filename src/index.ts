@@ -7,6 +7,7 @@ import {
   type InteractionReplyOptions
 } from "discord.js";
 import dns from "node:dns";
+import { monitorEventLoopDelay } from "node:perf_hooks";
 import { commandData, commandMap } from "./commands/index.js";
 import { env } from "./env.js";
 import { handleInteraction } from "./interactions/index.js";
@@ -40,6 +41,16 @@ const client = new Client({
   intents,
   partials: [Partials.Message, Partials.Channel, Partials.Reaction]
 });
+
+// Report measured heartbeat latency separately from slow searches or downloads.
+const eventLoopDelay = monitorEventLoopDelay({ resolution: 20 });
+eventLoopDelay.enable();
+setInterval(() => {
+  const gatewayMs = client.ws.ping;
+  console.info(`[music:health] gateway=${gatewayMs >= 0 ? Math.round(gatewayMs) : "unknown"}ms `
+    + `eventLoopP99=${Math.round(eventLoopDelay.percentile(99) / 1e6)}ms ready=${client.isReady()}`);
+  eventLoopDelay.reset();
+}, 60_000).unref();
 
 async function registerCommandsOnStart(readyClient: Client<true>) {
   if (!env.registerCommandsOnStart) return;
@@ -80,7 +91,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     await handleInteraction(interaction);
   } catch (error) {
-    console.error(error);
+    if (typeof error === "object" && error !== null && "code" in error && error.code === 10062) {
+      console.warn(`[discord:expired-interaction] id=${interaction.id} age=${Date.now() - interaction.createdTimestamp}ms`);
+      return;
+    }
+    console.error(error instanceof Error ? error.message : "Interaction failed.");
 
     if (!interaction.isRepliable()) return;
     const payload: InteractionReplyOptions = {

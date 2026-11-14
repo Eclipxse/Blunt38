@@ -1,3 +1,4 @@
+import { loadImage } from "@napi-rs/canvas";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildPlayerEmbed, buildPlayerRows, currentPanelResult, isPlayerPanel, playerQueueSnapshot, playerTiming, playerUrl, resolvePlayerState, type MusicPlayerView } from "./music-player.js";
@@ -71,13 +72,14 @@ test("player recognition excludes queue and advanced control panels", () => {
   assert.ok(!isPlayerPanel(undefined, "Music controls"));
 });
 
-test("local card renders PNG at a bounded size and reuses matching snapshots", async () => {
+test("local card renders JPEG at a bounded size and reuses matching snapshots", async () => {
   const first = renderMusicPlayerCard(view);
   assert.equal(first, renderMusicPlayerCard(view));
   const image = await first;
-  assert.equal(image.toString("hex", 0, 8), "89504e470d0a1a0a");
-  assert.equal(image.readUInt32BE(16), 1200);
-  assert.equal(image.readUInt32BE(20), 520);
+  assert.equal(image.toString("hex", 0, 3), "ffd8ff");
+  const decoded = await loadImage(image);
+  assert.equal(decoded.width, 1200);
+  assert.equal(decoded.height, 520);
   assert.ok(image.length < 1_000_000);
   const paused = await renderMusicPlayerCard({ ...view, state: "paused" });
   assert.notDeepEqual(image, paused);

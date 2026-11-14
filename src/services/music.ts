@@ -1,3 +1,7 @@
+import { commitMusicRequest, prepareMusicRequest } from "./music-playback-session.js";
+import express from "express";
+import { access } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import {
   ActionRowBuilder,
@@ -125,11 +129,12 @@ type MusicPlaybackFailure = {
 };
 
 type MusicRecoveryState = {
+  originalYoutubeUrl?: string;
   originalTitle: string;
   originalAuthor?: string;
   attempts: number;
   attemptedIdentifiers: string[];
-  attemptedSources: Array<SearchPlatform | "yt-dlp">;
+  attemptedSources: Array<SearchPlatform | "yt-dlp" | "native-youtube">;
 };
 
 export type MusicFilterPreset = "off" | "balanced" | "bassboost" | "nightcore" | "vaporwave" | "karaoke";
@@ -148,6 +153,61 @@ const maxPlaybackRecoveryAttempts = 2;
 const musicIdleDisconnectMs = 5 * 60_000;
 const standardPlaybackCache = new TtlLruCache<CachedStandardPlayback>(env.musicSearchCacheMax);
 const recoveryJobs = new MusicRecoveryJobs();
+const soundCloudOnly = env.musicSearchSource === "scsearch";
+const localTrackCatalog = new Map<string, MusicSearchResult>();
+const preparedAudioDirectory = fileURLToPath(new URL("../../assets/music/ready/", import.meta.url));
+const localAudioEntries = [
+  { id: "Kw21uQ1_sRo", title: "TROLLYWOOD 2.1", author: "", aliases: ["trollywood 2.1"] },
+  { id: "Zi_XLOBDo_Y", title: "Billie Jean", author: "Michael Jackson", aliases: ["billie jean", "billie jean michael jackson", "michael jackson billie jean"] },
+  { id: "gset79KMmt0", title: "Snowman", author: "Sia", aliases: ["snowman", "sia snowman", "snowman sia"] },
+  { id: "XbGs_qK2PQA", title: "Rap God", author: "Eminem", aliases: ["rap god", "rap god eminem", "eminem rap god", "eminem - rap god (explicit)"] }
+];
+
+async function warmLocalAudio(node: Pick<Player, "search">, requester: User) {
+  const entries = (await Promise.all(localAudioEntries.map(async (entry) => {
+    try {
+      await access(`${preparedAudioDirectory}${entry.id}.ogg`);
+      return entry;
+    } catch {
+      return null;
+    }
+  }))).filter((entry) => entry !== null);
+  if (!entries.length) return;
+
+  const app = express();
+  app.disable("x-powered-by");
+  app.use(express.static(preparedAudioDirectory, { index: false, dotfiles: "deny", redirect: false }));
+  const port = await new Promise<number>((resolve, reject) => {
+    const server = app.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (address && typeof address !== "string") resolve(address.port);
+      else reject(new Error("Local audio listener did not receive a TCP port."));
+    });
+    server.once("error", reject);
+    server.unref();
+  });
+
+  await Promise.allSettled(entries.map(async (entry) => {
+    const result = await withinMusicSearchDeadline(node.search(`http://127.0.0.1:${port}/${entry.id}.ogg`, requester), 4_000);
+    const track = result.tracks[0];
+    if (!track || !track.info.duration) return;
+    const webpageUrl = `https://www.youtube.com/watch?v=${entry.id}`;
+    track.userData = {
+      ...track.userData,
+      blunt38Resolver: "local-audio",
+      blunt38YoutubeId: entry.id,
+      blunt38Title: entry.title,
+      blunt38Author: entry.author,
+      blunt38DurationMs: track.info.duration,
+      blunt38WebpageUrl: webpageUrl
+    };
+    applyYoutubeResolverMetadata(track);
+    for (const alias of entry.aliases) localTrackCatalog.set(`query:${alias}`, result);
+    localTrackCatalog.set(`youtube:${entry.id}`, result);
+    console.info(`[music:local-ready] track=${entry.id}`);
+  }));
+}
+const preparedYoutubeStreams = new TtlLruCache<MusicSearchResult>(env.musicSearchCacheMax);
 const preparedYoutubeRecovery = new WeakMap<Player, {
   videoId: string;
   result: Promise<MusicSearchResult | null>;
@@ -170,6 +230,15 @@ function explainLavalinkError(error: unknown): never {
 }
 
 export function initMusic(client: Client<true>) {
+  const activeVoiceGuilds = [...client.guilds.cache.values()]
+    .filter((guild) => guild.voiceStates.cache.some((state) => Boolean(state.channelId)));
+  void mapWithConcurrency(activeVoiceGuilds, 3, (guild) => loadMusicGuildConfig(guild.id));
+  client.on("voiceStateUpdate", (previous, current) => {
+    if (current.channelId && previous.channelId !== current.channelId) {
+      void loadMusicGuildConfig(current.guild.id);
+    }
+  });
+
   manager = new LavalinkManager({
     nodes: [
       {
@@ -237,6 +306,11 @@ export function initMusic(client: Client<true>) {
   manager.nodeManager.on("connect", (node) => {
     console.log(`Lavalink node "${node.id}" connected.`);
   });
+  manager.nodeManager.once("connect", (node) => {
+    void warmLocalAudio(node, client.user).catch((error: unknown) => {
+      console.warn("[music:local-audio-error]", safeMusicErrorMessage(error));
+    });
+  });
 
   manager.nodeManager.on("disconnect", (node, reason) => {
     console.warn(
@@ -254,10 +328,14 @@ export function initMusic(client: Client<true>) {
     console.error(`Lavalink node "${node.id}" error:`, error.message);
   });
 
-  manager.on("playerDestroy", (player) => cancelMusicRecovery(player));
+  const pendingPlaybackPanels = new WeakMap<Player, { track: MusicTrack; publish: () => Promise<void> }>();
+  manager.on("playerDestroy", (player) => {
+    pendingPlaybackPanels.delete(player);
+    cancelMusicRecovery(player);
+  });
 
   manager.on("trackStart", musicEventHandler("trackStart", async (player, track) => {
-    player.setData("musicAwaitingTrackStart", false);
+    player.setData("musicAwaitingTrackStart", true);
     recoveryJobs.cancel(player);
     player.deleteData("musicRecoverySuppressed");
     const revision = randomUUID();
@@ -288,6 +366,37 @@ export function initMusic(client: Client<true>) {
       player.deleteData("musicRequestStartedAt");
     }
 
+    if (!track) return;
+    const requester = (track.requester as User | undefined) ?? client.user;
+    if (requester) prepareYoutubeRecovery(player, track, requester);
+    pendingPlaybackPanels.set(player, {
+      track,
+      publish: async () => {
+        if (!isCurrent()) return;
+        player.setData("musicAwaitingTrackStart", false);
+        if (Number.isFinite(requestedAt)) {
+          console.info(
+            `[music:audio-progress] guild=${player.guildId} ready=${Math.round(performance.now() - requestedAt)}ms `
+            + `voicePing=${player.ping.ws ?? "unknown"}ms`
+          );
+        }
+        await publishPlayingPanel(player, track, isCurrent);
+      }
+    });
+  }));
+
+  // TrackStart acknowledges a selected track. Only a real position update
+  // confirms playback, and missing progress alone must not replace a track.
+  manager.on("playerUpdate", musicEventHandler("playerUpdate", async (_previous, player) => {
+    const pending = pendingPlaybackPanels.get(player);
+    if (!pending || !player.connected || player.lastPosition <= 0) return;
+    const current = player.queue.current;
+    if (!current || musicTrackKey(current) !== musicTrackKey(pending.track)) return;
+    pendingPlaybackPanels.delete(player);
+    await pending.publish();
+  }));
+
+  async function publishPlayingPanel(player: Player, track: MusicTrack, isCurrent: () => boolean) {
     const channel = player.textChannelId ? await client.channels.fetch(player.textChannelId).catch(() => null) : null;
     if (!channel?.isTextBased() || channel.isDMBased() || !track) return;
     const guild = client.guilds.cache.get(player.guildId);
@@ -313,36 +422,40 @@ export function initMusic(client: Client<true>) {
           })
         : null;
     if (!isCurrent()) return;
-    const panelPayload = visual
-      ? {
-          content: `${trackLabel(track)}\nRequested by **${getRequesterName(track)}**`,
-          embeds: [],
-          files: [visual],
-          attachments: [],
-          components: musicControlRows(player)
-        }
-      : await nowPlayingPayload(player, track);
-
-    const pendingPanel = player.getData<Promise<void>>("musicPanelPending");
-    if (pendingPanel) await pendingPanel;
-    if (!isCurrent()) return;
-
-    const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
-    if (panelTarget?.channelId === channel.id && "messages" in channel) {
-      const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+    await commitMusicRequest(player, async () => {
       if (!isCurrent()) return;
-      if (panelMessage) {
-        await panelMessage.edit(panelPayload).catch(() => null);
-        return;
-      }
-    }
+      const panelPayload = visual
+        ? {
+            content: `${trackLabel(track)}\nRequested by **${getRequesterName(track)}**`,
+            embeds: [],
+            files: [visual],
+            attachments: [],
+            components: musicControlRows(player)
+          }
+        : await nowPlayingPayload(player, track);
 
-    const sent = await channel.send(panelPayload).catch(() => null);
-    if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
-  }));
+      const pendingPanel = player.getData<Promise<void>>("musicPanelPending");
+      if (pendingPanel) await pendingPanel;
+      if (!isCurrent()) return;
+
+      const panelTarget = player.getData<MusicPanelTarget>("musicPanelTarget");
+      if (panelTarget?.channelId === channel.id && "messages" in channel) {
+        const panelMessage = await channel.messages.fetch(panelTarget.messageId).catch(() => null);
+        if (!isCurrent()) return;
+        if (panelMessage) {
+          await panelMessage.edit(panelPayload).catch(() => null);
+          return;
+        }
+      }
+
+      const sent = await channel.send(panelPayload).catch(() => null);
+      if (sent) player.setData("musicPanelTarget", { channelId: sent.channelId, messageId: sent.id });
+    });
+  }
 
   manager.on("trackError", (player, track, payload) => {
     if (track && player.queue.current && musicTrackKey(track) !== musicTrackKey(player.queue.current)) return;
+    pendingPlaybackPanels.delete(player);
     player.setData("musicPanelRevision", randomUUID());
     invalidateFailedStream(track);
     const detail = playbackFailureDetail(payload);
@@ -357,6 +470,7 @@ export function initMusic(client: Client<true>) {
 
   manager.on("trackStuck", (player, track, payload) => {
     if (track && player.queue.current && musicTrackKey(track) !== musicTrackKey(player.queue.current)) return;
+    pendingPlaybackPanels.delete(player);
     player.setData("musicPanelRevision", randomUUID());
     invalidateFailedStream(track);
     const detail = playbackFailureDetail(payload);
@@ -370,6 +484,8 @@ export function initMusic(client: Client<true>) {
   });
 
   manager.on("queueEnd", musicEventHandler("queueEnd", async (player, track, payload) => {
+    pendingPlaybackPanels.delete(player);
+    player.setData("musicAwaitingTrackStart", false);
     const reason = payload.type === "TrackEndEvent" ? payload.reason : undefined;
     const endState = classifyMusicPlaybackEnd(payload.type, reason);
 
@@ -419,43 +535,64 @@ export function musicIsReady() {
   return Boolean(manager?.useable);
 }
 
+type MusicGuildConfig = Awaited<ReturnType<typeof getGuildConfig>>;
+const musicGuildConfigs = new TtlLruCache<MusicGuildConfig>(500);
+const pendingMusicConfigs = new Map<string, Promise<MusicGuildConfig | null>>();
+const musicConfigTtlMs = 5 * 60_000;
+
+export function cacheMusicGuildConfig(config: MusicGuildConfig) {
+  pendingMusicConfigs.delete(config.guildId);
+  musicGuildConfigs.set(config.guildId, config, musicConfigTtlMs);
+}
+
+function loadMusicGuildConfig(guildId: string): Promise<MusicGuildConfig | null> {
+  const cached = musicGuildConfigs.get(guildId);
+  if (cached) return Promise.resolve(cached);
+
+  const pending = pendingMusicConfigs.get(guildId);
+  if (pending) return pending;
+
+  const request = withinMusicSearchDeadline(getGuildConfig(guildId), 3_000)
+    .then((config) => {
+      if (pendingMusicConfigs.get(guildId) !== request) return musicGuildConfigs.get(guildId) ?? config;
+      musicGuildConfigs.set(guildId, config, musicConfigTtlMs);
+      return config;
+    })
+    .catch((error: unknown) => {
+      console.error(`[music:config-error] guild=${guildId}`, error);
+      return musicGuildConfigs.get(guildId) ?? null;
+    })
+    .finally(() => {
+      if (pendingMusicConfigs.get(guildId) === request) pendingMusicConfigs.delete(guildId);
+    });
+  pendingMusicConfigs.set(guildId, request);
+  return request;
+}
+
 export async function createOrGetMusicPlayer(context: MusicRequestContext) {
-  if (!context.guild || !context.guildId) {
-    throw new Error("Music commands only work in servers.");
-  }
+  const { guild, guildId } = context;
+  if (!guild || !guildId) throw new Error("Music commands only work in servers.");
 
-  if (!musicIsReady() || !manager) {
-    throw new Error(lavalinkUnavailableMessage);
-  }
+  const musicManager = manager;
+  if (!musicManager?.useable) throw new Error(lavalinkUnavailableMessage);
 
-  const existingPlayer = manager.getPlayer(context.guildId);
-  const cachedMember = context.guild.members.cache.get(context.user.id);
-  const cachedBotMember = context.guild.members.me;
-  const [member, me, config] = await Promise.all([
-    cachedMember ? Promise.resolve(cachedMember) : context.guild.members.fetch(context.user.id),
-    cachedBotMember
-      ? Promise.resolve(cachedBotMember)
-      : context.guild.members.fetchMe().catch(() => null),
-    existingPlayer
-      ? Promise.resolve(null)
-      : getGuildConfig(context.guildId).catch((error) => {
-          console.error(`[music:config-error] guild=${context.guildId}`, error);
-          return null;
-        })
-  ]);
-  const voiceChannelId = member.voice.channelId;
-  if (!voiceChannelId) {
-    throw new Error("Join a voice channel first.");
-  }
+  const getVoiceChannel = () => guild.voiceStates.cache.get(context.user.id)?.channelId;
+  const voiceChannelId = getVoiceChannel();
+  if (!voiceChannelId) throw new Error("Join a voice channel first.");
 
-  if (me?.voice.channelId && me.voice.channelId !== voiceChannelId) {
+  const config = musicManager.getPlayer(guildId) ? null : await loadMusicGuildConfig(guildId);
+  if (getVoiceChannel() !== voiceChannelId) throw new Error("Your voice channel changed. Try again.");
+  const botVoiceChannelId = guild.voiceStates.cache.get(guild.client.user.id)?.channelId;
+  const existingPlayer = musicManager.getPlayer(guildId);
+  const activeVoiceChannel = botVoiceChannelId ?? existingPlayer?.voiceChannelId;
+  if (activeVoiceChannel && activeVoiceChannel !== voiceChannelId) {
     throw new Error("I am already playing in another voice channel.");
   }
 
   const defaultVolume = Math.max(1, Math.min(100, config?.musicDefaultVolume ?? env.musicDefaultVolume));
 
-  const player = manager.createPlayer({
-    guildId: context.guildId,
+  const player = musicManager.createPlayer({
+    guildId,
     voiceChannelId,
     textChannelId: context.channelId,
     selfDeaf: true,
@@ -471,16 +608,17 @@ export async function createOrGetMusicPlayer(context: MusicRequestContext) {
 
   return {
     player,
-    shouldConnect: me?.voice.channelId !== voiceChannelId
+    shouldConnect: botVoiceChannelId !== voiceChannelId
   };
 }
 
-export async function playQuery(interaction: ChatInputCommandInteraction, query: string) {
+export async function playQuery(interaction: ChatInputCommandInteraction, query: string, acknowledged: Promise<unknown>) {
   return playInput(interaction, query, async (player, first) => {
-    const loadingMessage = await interaction.editReply(await nowPlayingPayload(player, first, "loading"));
+    const [payload] = await Promise.all([nowPlayingPayload(player, first, "loading"), acknowledged]);
+    const loadingMessage = await interaction.editReply(payload);
 
     return { channelId: loadingMessage.channelId, messageId: loadingMessage.id };
-  });
+  }, acknowledged);
 }
 
 export async function playMessageQuery(message: Pick<Message<true>, "guild" | "author" | "channelId" | "reply">, query: string) {
@@ -501,103 +639,65 @@ export async function playMessageQuery(message: Pick<Message<true>, "guild" | "a
 async function playInput(
   context: MusicRequestContext,
   query: string,
-  createLoadingPanel: (player: Player, first: MusicTrack) => Promise<MusicPanelTarget>
+  createLoadingPanel: (player: Player, first: MusicTrack) => Promise<MusicPanelTarget>,
+  acknowledged: Promise<unknown> = Promise.resolve()
 ) {
   const startedAt = performance.now();
   const { player, shouldConnect } = await createOrGetMusicPlayer(context);
-  const setupMs = performance.now() - startedAt;
-  cancelSpotifyQueueWarmup(player);
-  const spotifyInput = parseSpotifyInput(query);
-  const allowYtDlpFallback = env.musicYtDlpEnabled && isYoutubeUrl(query);
+  const spotify = parseSpotifyInput(query);
   const searchQuery = isUrl(query)
     ? query
     : { query, source: env.musicSearchSource as SearchPlatform };
+  const search = spotify
+    ? resolveSpotifyPlayback(player, spotify, context.user)
+    : resolveStandardPlayback(player, query, context.user, env.musicYtDlpEnabled && isYoutubeUrl(query), searchQuery);
+  const resolved = await prepareMusicRequest({
+    acknowledged,
+    search,
+    connect: () => shouldConnect ? connectPlayerWithRetry(player, context.guildId) : Promise.resolve()
+  }).catch((error: unknown) => explainLavalinkError(error));
 
-  const searchStartedAt = performance.now();
-  let searchMs = 0;
-  let connectMs = 0;
-  let panelMs = 0;
-
-  const searchPromise = (spotifyInput
-    ? resolveSpotifyPlayback(player, spotifyInput, context.user)
-    : resolveStandardPlayback(player, query, context.user, allowYtDlpFallback, searchQuery))
-    .then((result) => {
-      searchMs = performance.now() - searchStartedAt;
-      return result;
-    })
-    .catch((error: unknown) => {
-      console.error(
-        `[music:search-error] guild=${context.guildId} node=${player.node.id} `
-        + `after=${Math.round(performance.now() - searchStartedAt)}ms error=${safeMusicErrorMessage(error)}`
-      );
-      explainLavalinkError(error);
-    });
-
-  const connectPromise = shouldConnect
-    ? connectPlayerWithRetry(player, context.guildId).then((elapsed) => {
-        connectMs = elapsed;
-      })
-    : Promise.resolve();
-
-  const [resolved] = await Promise.all([searchPromise, connectPromise]);
-  assertMusicPlayerActive(player);
-
-  if (!resolved.added.length) {
-    throw new Error("No tracks found.");
-  }
-
-  const tracks = resolved.added;
-  player.queue.add(tracks);
-
-  const spotifyQueueWarmup = resolved.spotifyDeferredQueue
-    ? warmSpotifyQueue(player, resolved.spotifyDeferredQueue)
-    : undefined;
-
-  const startsPlayback = !player.playing && !player.paused;
-
-  if (startsPlayback) {
+  return commitMusicRequest(player, async () => {
+    assertMusicPlayerActive(player);
+    const tracks = resolved.added;
     const first = tracks[0];
     if (!first) throw new Error("No playable tracks were resolved.");
 
-    const panelStartedAt = performance.now();
-    const panelPromise = createLoadingPanel(player, first)
-      .then((target) => {
-        player.setData("musicPanelTarget", target);
-      })
-      .catch((error: unknown) => {
-        console.error(`[music:panel-error] guild=${context.guildId}`, error);
-      })
-      .finally(() => {
-        panelMs = performance.now() - panelStartedAt;
-      });
+    cancelSpotifyQueueWarmup(player);
+    player.queue.add(tracks);
+    const spotifyQueueWarmup = resolved.spotifyDeferredQueue
+      ? warmSpotifyQueue(player, resolved.spotifyDeferredQueue)
+      : undefined;
+    const startsPlayback = !player.playing && !player.paused;
 
-    player.setData("musicPanelPending", panelPromise);
-    player.setData("musicRequestStartedAt", startedAt);
-    const playback = startMusicPlayback(player);
-    if (resolved.result.loadType !== "playlist" && tracks.length === 1) {
-      prepareYoutubeRecovery(player, first, context.user);
+    if (startsPlayback) {
+      const panel = Promise.resolve().then(() => createLoadingPanel(player, first))
+        .then((target) => { player.setData("musicPanelTarget", target); })
+        .catch((error: unknown) => {
+          console.error(`[music:panel-error] guild=${context.guildId} detail=${safeMusicErrorMessage(error)}`);
+        })
+        .finally(() => {
+          if (player.getData<Promise<void>>("musicPanelPending") === panel) player.deleteData("musicPanelPending");
+        });
+      player.setData("musicPanelPending", panel);
+      player.setData("musicRequestStartedAt", startedAt);
+      await startMusicPlayback(player).catch((error: unknown) => explainLavalinkError(error));
     }
-    const [playResult] = await Promise.allSettled([playback, panelPromise]);
-    if (player.getData<Promise<void>>("musicPanelPending") === panelPromise) {
-      player.deleteData("musicPanelPending");
-    }
-    if (playResult.status === "rejected") explainLavalinkError(playResult.reason);
-  }
 
-  console.info(
-    `[music:play] guild=${context.guildId} node=${player.node.id} source=${resolved.sourceLabel} `
-    + `setup=${Math.round(setupMs)}ms connect=${Math.round(connectMs)}ms search=${Math.round(searchMs)}ms `
-    + `panel=${Math.round(panelMs)}ms command=${Math.round(performance.now() - startedAt)}ms`
-  );
+    console.info(
+      `[music:play] guild=${context.guildId} node=${player.node.id} source=${resolved.sourceLabel} `
+      + `command=${Math.round(performance.now() - startedAt)}ms`
+    );
 
-  return {
-    player,
-    result: resolved.result,
-    added: tracks,
-    startsPlayback,
-    spotifySummary: resolved.spotifySummary,
-    spotifyQueueWarmup
-  };
+    return {
+      player,
+      result: resolved.result,
+      added: tracks,
+      startsPlayback,
+      spotifySummary: resolved.spotifySummary,
+      spotifyQueueWarmup
+    };
+  });
 }
 
 async function connectPlayerWithRetry(player: Player, guildId: string | null) {
@@ -623,6 +723,14 @@ async function connectPlayerWithRetry(player: Player, guildId: string | null) {
   explainLavalinkError(lastError);
 }
 
+function preparedYoutubeStream(result: MusicSearchResult, requester: User) {
+  if (!env.musicYtDlpEnabled || result.loadType === "playlist") return undefined;
+  const first = result.tracks[0];
+  const id = first?.info.uri ? youtubeVideoId(first.info.uri) : null;
+  const stream = id && !first?.info.isStream && preparedYoutubeStreams.get(id);
+  return stream ? cloneCachedMusicSearchResult(stream, requester) : undefined;
+}
+
 async function resolveStandardPlayback(
   player: Player,
   query: string,
@@ -632,9 +740,23 @@ async function resolveStandardPlayback(
 ): Promise<MusicPlayResult> {
   const startedAt = performance.now();
   const cacheKey = standardPlaybackCacheKey(query);
+  const isYoutubePlaylist = isYoutubeUrl(query) && new URL(query).searchParams.has("list");
+  const local = cacheKey && !isYoutubePlaylist ? localTrackCatalog.get(cacheKey) : undefined;
+  if (local) {
+    console.info("[music:search] cache=hit winner=local-audio elapsed=0ms");
+    return musicPlayResult(cloneCachedMusicSearchResult(local, requester), "local-audio");
+  }
+  if (soundCloudOnly && typeof searchQuery === "string") {
+    const { hostname } = new URL(query);
+    if (hostname !== "soundcloud.com" && !hostname.endsWith(".soundcloud.com")) {
+      throw new Error("Search by song title or paste a SoundCloud link.");
+    }
+  }
   const cached = cacheKey ? standardPlaybackCache.get(cacheKey) : undefined;
 
   if (cached) {
+    const prepared = preparedYoutubeStream(cached.result, requester);
+    if (prepared) return musicPlayResult(prepared, "cache/prepared-audio");
     const result = cloneCachedMusicSearchResult(cached.result, requester);
     console.info(`[music:search] cache=hit winner=${cached.sourceLabel} elapsed=${Math.round(performance.now() - startedAt)}ms`);
     return musicPlayResult(result, `cache/${cached.sourceLabel}`);
@@ -660,6 +782,14 @@ async function resolveStandardPlayback(
     );
   }
   const result = winner.value;
+  const exactId = typeof searchQuery !== "string" && result.loadType !== "playlist"
+    ? youtubeVideoId(result.tracks[0]?.info.uri ?? "")
+    : null;
+  const exactLocal = exactId ? localTrackCatalog.get(`youtube:${exactId}`) : undefined;
+  if (exactLocal) {
+    console.info("[music:search] winner=local-audio match=video-id");
+    return musicPlayResult(cloneCachedMusicSearchResult(exactLocal, requester), "local-audio");
+  }
 
   const cacheTtlMs = musicSearchResultCacheTtl(
     winner.sourceLabel,
@@ -677,10 +807,22 @@ async function resolveStandardPlayback(
     `[music:search] cache=${cacheKey ? "miss" : "bypass"} winner=${winner.sourceLabel} `
     + `elapsed=${Math.round(performance.now() - startedAt)}ms`
   );
-  return musicPlayResult(result, winner.sourceLabel);
+  const prepared = preparedYoutubeStream(result, requester);
+  return prepared
+    ? musicPlayResult(prepared, "cache/prepared-audio")
+    : musicPlayResult(result, winner.sourceLabel);
 }
 
 async function resolveTextPlayback(player: Player, query: string, requester: User) {
+  if (soundCloudOnly) {
+    return withinMusicSearchDeadline(
+      firstAcceptableMusicResult([
+        musicSearchCandidate(player, { query, source: "scsearch" }, requester, "SoundCloud")
+      ], hasMusicTracks),
+      env.musicSearchRecoveryTimeoutMs
+    );
+  }
+
   const primaryRace = firstAcceptableMusicResult(
     primaryYoutubeSearchSources().map((source) => musicSearchCandidate(
       player,
@@ -947,7 +1089,7 @@ async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrack
 
   // A healthy Lavalink YouTube source is much quicker than spawning yt-dlp and
   // lets Spotify links work even when the optional direct-stream resolver is off.
-  for (const query of queries) {
+  for (const query of soundCloudOnly ? [] : queries) {
     for (const source of spotifyYoutubeSearchSources()) {
       try {
         console.info(`[music:spotify-youtube] source=${source} searching=${JSON.stringify(query)}`);
@@ -970,7 +1112,7 @@ async function resolveSpotifyTrackPlayback(player: Player, spotify: SpotifyTrack
 
   // Keep yt-dlp available as a last resort for installations that explicitly
   // enable it, but do not make it a requirement for every Spotify link.
-  if (env.musicYtDlpEnabled) {
+  if (!soundCloudOnly && env.musicYtDlpEnabled) {
     for (const query of queries) {
       try {
         console.info(`[music:spotify-ytdlp] resolving=${JSON.stringify(query)}`);
@@ -1212,23 +1354,59 @@ function playerView(player: Player, track: MusicTrack | null = player.queue.curr
 }
 
 export function nowPlayingEmbed(player: Player, track = player.queue.current) {
-  return buildPlayerEmbed(playerView(player, track), env.brandName, palette.electric);
+  return buildPlayerEmbed(playerView(player, track), env.brandName, 0x81b4ff);
 }
 
 export async function nowPlayingPayload(player: Player, track: MusicTrack | null = player.queue.current, state?: MusicPlayerState) {
   const view = playerView(player, track, state);
-  const embed = buildPlayerEmbed(view, env.brandName, palette.electric);
-  const image = await renderMusicPlayerCard(view).catch(() => null);
+  const embed = buildPlayerEmbed(view, env.brandName, 0x81b4ff);
+  const image = view.state === "loading" ? null : await renderMusicPlayerCard(view).catch(() => null);
   const files = image ? [new AttachmentBuilder(image, {
-    name: "listening-room.png",
-    description: "A midnight-violet vinyl player with the supplied Raven portrait, current playback status, position snapshot and next-track details."
+    name: "listening-room.jpg",
+    description: "Blue stars and a pixel music phone beside the track, playback position, and next song."
   })] : [];
-  if (image) embed.setImage("attachment://listening-room.png");
+  if (image) embed.setImage("attachment://listening-room.jpg");
   return { content: "", embeds: [embed], files, attachments: [], components: buildPlayerRows(view.state, view.queued) };
 }
 
 function playerPanelStamp(player: Player) {
   return JSON.stringify([player.getData("musicPanelRevision"), player.queue.current && musicTrackKey(player.queue.current), player.paused, player.playing, player.getData("musicAwaitingTrackStart"), player.volume, player.queue.tracks.length, player.queue.tracks.slice(0, 2).map(musicTrackKey)]);
+}
+
+export function setMusicPaused(player: Player, paused: boolean, updatePanels: () => Promise<unknown>) {
+  return commitMusicRequest(player, async () => {
+    assertMusicPlayerActive(player);
+    const current = player.queue.current;
+    if (!current) throw new Error("Nothing is playing in this server.");
+    const previous = { paused: player.paused, playing: player.playing, position: player.position };
+    // Send the desired state even when the local client already shows it.
+    // Node state may have diverged after a failed request or reconnect.
+    try {
+      const state = await player.node.updatePlayer({ guildId: player.guildId, playerOptions: { paused } });
+      assertMusicPlayerActive(player);
+      if (player.queue.current !== current) return;
+      player.paused = state.paused;
+      player.playing = !state.paused;
+      player.lastPosition = state.state.position;
+      player.lastPositionChange = state.paused ? null : Date.now();
+      if (state.paused !== paused) throw new Error("The audio server did not apply the playback change.");
+    } catch (error) {
+      if (manager?.getPlayer(player.guildId) === player && player.queue.current === current) {
+        const snapshot = await player.node.fetchPlayer(player.guildId).catch(() => null);
+        const state = snapshot && "paused" in snapshot ? snapshot : null;
+        if (manager?.getPlayer(player.guildId) === player && player.queue.current === current) {
+          player.paused = state?.paused ?? previous.paused;
+          player.playing = state ? !state.paused : previous.playing;
+          player.lastPosition = state?.state.position ?? previous.position;
+          player.lastPositionChange = player.playing ? Date.now() : null;
+          await updatePanels().catch(() => undefined);
+        }
+      }
+      throw error;
+    }
+    await updatePanels();
+    return player.paused;
+  });
 }
 
 export async function currentNowPlayingPayload(player: Player) {
@@ -1393,7 +1571,7 @@ async function recoverPlayback(
   const failedKey = musicTrackKey(failedTrack);
   if (player.getData<string>("musicRecoverySuppressed") === failedKey
     || (player.queue.current && musicTrackKey(player.queue.current) !== failedKey)) return;
-  const resumePosition = player.position;
+  const resumePosition = player.getData<boolean>("musicAwaitingTrackStart") ? 0 : player.position;
   const job = recoveryJobs.begin(player, failedKey);
   if (!job) return;
   let expectedKey = job.trackKey;
@@ -1501,6 +1679,7 @@ async function findPlaybackRecovery(
   const state = player.getData<MusicRecoveryState>("musicRecoveryState") ?? {
     originalTitle: failedTrack.info.title,
     originalAuthor: failedTrack.info.author,
+    originalYoutubeUrl: isYoutubeTrack(failedTrack) ? failedTrack.info.uri : undefined,
     attempts: 0,
     attemptedIdentifiers: failedIdentifier ? [failedIdentifier] : [],
     attemptedSources: []
@@ -1509,91 +1688,107 @@ async function findPlaybackRecovery(
   if (state.attempts >= maxPlaybackRecoveryAttempts) return null;
 
   const query = `${state.originalTitle} ${state.originalAuthor ?? ""}`.trim();
-  if (
-    env.musicYtDlpEnabled
-    && isYoutubeTrack(failedTrack)
-    && !state.attemptedSources.includes("yt-dlp")
-  ) {
-    state.attemptedSources.push("yt-dlp");
-    player.setData("musicRecoveryState", state);
-
-    try {
-      const exactTarget = failedTrack.info.uri?.startsWith("http") ? failedTrack.info.uri : undefined;
-      const prepared = preparedYoutubeRecovery.get(player);
-      const usePrepared = exactTarget && prepared && prepared.videoId === youtubeVideoId(exactTarget);
-      if (usePrepared) preparedYoutubeRecovery.delete(player);
-      const ready = usePrepared ? await prepared.result : null;
-      if (!isCurrent()) return null;
-      const expiry = Number(ready?.tracks[0]?.userData?.blunt38StreamExpiresAt ?? 0);
-      const result = ready && expiry > Date.now() + 5_000
-        ? ready
-        : await searchYoutubeWithYtDlp(player, query, requester, exactTarget);
-      if (!isCurrent()) return null;
-      const candidate = result.tracks[0];
-      if (candidate) {
-        state.attempts += 1;
-        const candidateKey = musicTrackKey(candidate);
-        if (candidateKey) state.attemptedIdentifiers.push(candidateKey);
-        player.setData("musicRecoveryState", state);
-        return {
-          source: "yt-dlp" as const,
-          sourceLabel: "yt-dlp direct audio",
-          track: candidate
-        };
+  type RecoverySource = MusicRecoveryState["attemptedSources"][number];
+  const candidates: Array<MusicSearchCandidate<{ source: RecoverySource; track: MusicTrack }>> = [];
+  const exactTarget = state.originalYoutubeUrl ?? failedTrack.info.uri;
+  const exactVideoId = exactTarget ? youtubeVideoId(exactTarget) : null;
+  const resolvingOriginal = Boolean(state.originalYoutubeUrl);
+  if (!soundCloudOnly && env.musicYtDlpEnabled && exactTarget && exactVideoId && resolvingOriginal
+    && failedTrack.userData?.blunt38Resolver !== "yt-dlp"
+    && !state.attemptedSources.includes("yt-dlp")) {
+    candidates.push({
+      sourceLabel: "yt-dlp",
+      run: async () => {
+        const prepared = preparedYoutubeRecovery.get(player);
+        const ready = prepared?.videoId === exactVideoId ? await prepared.result : null;
+        if (!isCurrent()) throw new Error("Playback recovery was cancelled.");
+        const expiry = Number(ready?.tracks[0]?.userData?.blunt38StreamExpiresAt ?? 0);
+        const result = ready && expiry > Date.now() + 5_000
+          ? ready
+          : await searchYoutubeWithYtDlp(player, query, requester, exactTarget);
+        const track = result.tracks[0];
+        if (!track) throw new Error("The exact upload returned no audio.");
+        return { source: "yt-dlp", track };
       }
-    } catch (error) {
-      if (!isCurrent()) return null;
-      recordPlaybackFailure(player, failedTrack, playbackFailureDetail(error));
-      console.error(
-        `[music:recovery-ytdlp-error] guild=${player.guildId} detail=${playbackFailureDetail(error)}`
-      );
-    }
+    });
+  }
+
+  if (!soundCloudOnly && exactTarget && exactVideoId && Boolean(failedTrack.userData?.blunt38Resolver)
+    && !state.attemptedSources.includes("native-youtube")) {
+    candidates.push({
+      sourceLabel: "native-youtube",
+      run: async () => {
+        const result = await withinMusicSearchDeadline(
+          player.search({ query: exactVideoId, source: "link" }, failedTrack.requester ?? requester),
+          env.musicSearchRecoveryTimeoutMs
+        );
+        const track = result.tracks.find((candidate) => candidate.info.identifier === exactVideoId);
+        if (!track) throw new Error("The exact upload was unavailable through native YouTube playback.");
+        return { source: "native-youtube", track };
+      }
+    });
   }
 
   for (const source of playbackRecoverySources()) {
-    if (!isCurrent()) return null;
     if (state.attemptedSources.includes(source)) continue;
-    state.attemptedSources.push(source);
-    player.setData("musicRecoveryState", state);
-
-    const result = await withinMusicSearchDeadline(
-      player.search({ query, source }, failedTrack.requester ?? requester),
-      env.musicSearchRecoveryTimeoutMs
-    ).catch((error) => {
-      console.error(
-        `[music:recovery-search-error] guild=${player.guildId} source=${source} detail=${playbackFailureDetail(error)}`
-      );
-      return null;
-    });
-    if (!isCurrent()) return null;
-    const candidate = result?.tracks.find((track) => {
-      const key = musicTrackKey(track);
-      return Boolean(key)
-        && !state.attemptedIdentifiers.includes(key)
-        && isConfidentMusicMatch(
-          state.originalTitle,
-          state.originalAuthor,
-          track.info.title,
-          track.info.author
-        );
-    });
-    if (!candidate) continue;
-
-    const candidateKey = musicTrackKey(candidate);
-    state.attempts += 1;
-    if (candidateKey) state.attemptedIdentifiers.push(candidateKey);
-    player.setData("musicRecoveryState", state);
-    return {
-      source,
+    candidates.push({
       sourceLabel: musicSourceLabel(source),
-      track: candidate
-    };
+      run: async () => {
+        const result = await withinMusicSearchDeadline(
+          player.search({ query, source }, failedTrack.requester ?? requester),
+          env.musicSearchRecoveryTimeoutMs
+        );
+        const track = result.tracks.find((candidate) => {
+          const key = musicTrackKey(candidate);
+          return Boolean(key)
+            && !state.attemptedIdentifiers.includes(key)
+            && isConfidentMusicMatch(
+              state.originalTitle,
+              state.originalAuthor,
+              candidate.info.title,
+              candidate.info.author
+            );
+        });
+        if (!track) throw new Error("No matching alternate recording was found.");
+        return { source, track };
+      }
+    });
   }
 
-  return null;
+  if (!candidates.length || !isCurrent()) return null;
+  const startedAt = performance.now();
+  const exactCandidate = candidates.find((candidate) => candidate.sourceLabel === "yt-dlp");
+  const otherCandidates = candidates.filter((candidate) => candidate !== exactCandidate);
+  const alternatives = otherCandidates.length
+    ? raceMusicSources(otherCandidates, () => true, 1_500, 6_000)
+    : Promise.reject(new Error("No alternate audio sources are available."));
+  // A failed alternate must not cancel the already running exact stream lookup.
+  const winner = await (exactCandidate
+    ? preferMusicResult(
+        firstAcceptableMusicResult([exactCandidate], () => true),
+        alternatives,
+        Math.min(18_000, env.musicYtDlpTimeoutMs)
+      )
+    : alternatives).catch((error: unknown) => {
+    if (isCurrent()) {
+      console.warn(`[music:recovery-search-error] guild=${player.guildId} detail=${playbackFailureDetail(error)}`);
+    }
+    return null;
+  });
+  if (!winner || !isCurrent()) return null;
+
+  const { source, track } = winner.value;
+  const key = musicTrackKey(track);
+  if (key) state.attemptedIdentifiers.push(key);
+  state.attemptedSources.push(source);
+  state.attempts += 1;
+  player.setData("musicRecoveryState", state);
+  console.info(`[music:recovery-search] guild=${player.guildId} source=${source} elapsed=${Math.round(performance.now() - startedAt)}ms`);
+  return { source, track };
 }
 
 function playbackRecoverySources(): SearchPlatform[] {
+  if (soundCloudOnly) return ["scsearch"];
   const configured = env.musicSearchSource as SearchPlatform;
   const sources: SearchPlatform[] = configured.toString().startsWith("ytm")
     ? ["scsearch", "ytsearch", configured]
@@ -1615,17 +1810,26 @@ function musicTrackKey(track: MusicTrack) {
 }
 
 function invalidateFailedStream(track: MusicTrack | null) {
+  if (track?.userData?.blunt38Resolver === "local-audio") {
+    const id = track.userData.blunt38YoutubeId;
+    for (const [key, result] of localTrackCatalog) {
+      if (result.tracks[0]?.userData?.blunt38YoutubeId === id) localTrackCatalog.delete(key);
+    }
+    return;
+  }
   if (track?.userData?.blunt38Resolver !== "yt-dlp") return;
   const uri = track.info.uri;
   if (!uri || !isYoutubeUrl(uri)) return;
   invalidateCachedYoutubeAudio(uri);
+  const videoId = youtubeVideoId(uri);
+  if (videoId) preparedYoutubeStreams.delete(videoId);
   const key = standardPlaybackCacheKey(uri);
   if (key) standardPlaybackCache.delete(key);
 }
 
 function prepareYoutubeRecovery(player: Player, track: MusicTrack, requester: User) {
   if (!env.musicWarmYoutubeRecovery || !env.musicYtDlpEnabled || preparingYoutubeRecovery
-    || track.info.isStream || track.userData?.blunt38Resolver === "yt-dlp") return;
+    || track.info.isStream || track.userData?.blunt38Resolver) return;
   const url = track.info.uri;
   const videoId = url ? youtubeVideoId(url) : null;
   if (!url || !videoId || preparedYoutubeRecovery.get(player)?.videoId === videoId) return;
@@ -1689,13 +1893,17 @@ async function searchYoutubeWithYtDlp(player: Player, query: string, requester: 
     blunt38StreamExpiresAt: resolved.expiresAt ?? 0
   };
   applyResolvedYoutubeInfo(track, resolved);
+  const cacheTtlMs = (resolved.expiresAt ?? 0) - Date.now() - 30_000;
+  if (!resolved.isLive && cacheTtlMs > 0) {
+    preparedYoutubeStreams.set(resolved.id, cloneCachedMusicSearchResult(result), cacheTtlMs);
+  }
   return result;
 }
 
 function applyYoutubeResolverMetadata(track: MusicTrack | null) {
   if (!track) return;
   const data = track.userData;
-  if (data?.blunt38Resolver === "yt-dlp") {
+  if (data?.blunt38Resolver === "yt-dlp" || data?.blunt38Resolver === "local-audio") {
     const durationMs = typeof data.blunt38DurationMs === "number" ? data.blunt38DurationMs : 0;
     applyResolvedYoutubeInfo(track, {
       id: String(data.blunt38YoutubeId ?? track.info.identifier ?? "youtube"),

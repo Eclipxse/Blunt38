@@ -17,6 +17,7 @@ import {
   queueEmbed,
   queueSearchResult,
   refreshNowPlayingPanel,
+  setMusicPaused,
   setPlayerMusicSettings,
   startMusicPlayback,
   trackLabel
@@ -36,7 +37,22 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
   const player = getMusicPlayer(interaction.guildId);
   if (!player) {
-    await interaction.reply({ content: "Nothing is playing in this server.", flags: MessageFlags.Ephemeral });
+    const embed = interaction.message.embeds[0];
+    const stalePanel = isPlayerPanel(embed?.author?.name, embed?.title);
+    const content = "Nothing is playing. Use /play to start a new track.";
+    if (stalePanel && !interaction.message.flags.has(MessageFlags.Ephemeral)) {
+      const payload = { content, embeds: [], components: [], attachments: [] };
+      try {
+        await interaction.update(payload);
+      } catch (error) {
+        if (typeof error !== "object" || error === null || !("code" in error) || error.code !== 10062) throw error;
+        console.warn(`[music:expired-control] age=${Date.now() - interaction.createdTimestamp}ms`);
+        // A restart can leave a public player card behind after its session is gone.
+        if (!getMusicPlayer(interaction.guildId)) await interaction.message.edit(payload);
+      }
+      return;
+    }
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral });
     return;
   }
 
@@ -78,23 +94,47 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
     return;
   }
 
-  await interaction.deferUpdate();
+  const age = Date.now() - interaction.createdTimestamp;
+  const ackStartedAt = performance.now();
+  const pauseControl = action === "pause" || action === "resume";
+  let acknowledged = true;
+  try {
+    await interaction.deferUpdate();
+    if (pauseControl) {
+      console.info(`[music:control-ack] action=${action} age=${age}ms ack=${Math.round(performance.now() - ackStartedAt)}ms`);
+    }
+  } catch (error) {
+    if (typeof error !== "object" || error === null || !("code" in error) || error.code !== 10062) throw error;
+    console.warn(`[music:expired-control] action=${action} age=${age}ms ack=${Math.round(performance.now() - ackStartedAt)}ms`);
+    const panel = player.getData<{ channelId: string; messageId: string }>("musicPanelTarget");
+    // Only the active public card may apply an action after its acknowledgement expires.
+    if (!pauseControl || interaction.message.flags.has(MessageFlags.Ephemeral)
+      || panel?.channelId !== interaction.channelId || panel.messageId !== interaction.message.id
+      || getMusicPlayer(interaction.guildId) !== player) return;
+    acknowledged = false;
+  }
+
   try {
     await ensureMusicController(interaction, player);
 
-    if (action === "pause") {
-      await player.pause();
-      const payload = fromQueue ? queuePayload() : fromPlayer ? await currentNowPlayingPayload(player) : { components: musicControlRows(player) };
-      if (payload) await interaction.editReply(payload);
-      if (!fromPlayer) await refreshNowPlayingPanel(interaction.client, player);
-      return;
-    }
-
-    if (action === "resume") {
-      await player.resume();
-      const payload = fromQueue ? queuePayload() : fromPlayer ? await currentNowPlayingPayload(player) : { components: musicControlRows(player) };
-      if (payload) await interaction.editReply(payload);
-      if (!fromPlayer) await refreshNowPlayingPanel(interaction.client, player);
+    if (action === "pause" || action === "resume") {
+      await setMusicPaused(player, action === "pause", async () => {
+        const panel = player.getData<{ channelId: string; messageId: string }>("musicPanelTarget");
+        const isTrackedPanel = panel?.channelId === interaction.channelId && panel.messageId === interaction.message.id;
+        const refresh = isTrackedPanel ? Promise.resolve() : refreshNowPlayingPanel(interaction.client, player);
+        try {
+          const payload = fromQueue ? queuePayload() : fromPlayer
+            ? await currentNowPlayingPayload(player)
+            : { components: musicControlRows(player) };
+          if (payload) {
+            if (acknowledged) await interaction.editReply(payload);
+            else await interaction.message.edit(payload);
+          }
+        } finally {
+          await refresh;
+        }
+      });
+      console.info(`[music:control-applied] action=${action} paused=${player.paused} acknowledged=${acknowledged}`);
       return;
     }
 
@@ -174,6 +214,10 @@ export async function handleMusicButton(interaction: ButtonInteraction) {
 
     await interaction.followUp({ content: "Unknown music control.", flags: MessageFlags.Ephemeral });
   } catch (error) {
+    if (!acknowledged) {
+      console.warn(`[music:late-control-failed] action=${action}`);
+      return;
+    }
     await interaction.followUp({
       content: error instanceof Error ? error.message : "Could not control the player.",
       flags: MessageFlags.Ephemeral

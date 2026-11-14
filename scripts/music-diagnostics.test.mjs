@@ -30,3 +30,10 @@ test("diagnostics bound returned events and identify routing and timeout failure
   assert.equal(summary.failures["source-rate-limit"], 1);
   assert.equal(summary.failures["lavalink-unavailable"], 1);
 });
+
+test("diagnostics separate measured gateway latency from event-loop delay", () => {
+  const summary = summarizeMusicLogs("[music:health] gateway=42ms eventLoopP99=21ms ready=true");
+  assert.equal(summary.recentEvents[0].gatewayMs, 42);
+  assert.equal(summary.recentEvents[0].eventLoopP99Ms, 21);
+  assert.equal(summary.recentEvents[0].event, "health");
+});

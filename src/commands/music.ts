@@ -1,6 +1,7 @@
 import { MessageFlags, PermissionFlagsBits, type ChatInputCommandInteraction } from "discord.js";
 import {
   applyMusicFilter,
+  cacheMusicGuildConfig,
   cancelMusicRecovery,
   cancelSpotifyQueueWarmup,
   createMusicSearch,
@@ -18,6 +19,7 @@ import {
   playQuery,
   queueEmbed,
   refreshNowPlayingPanel,
+  setMusicPaused,
   setPlayerMusicSettings,
   startMusicPlayback,
   trackLabel
@@ -31,11 +33,27 @@ export const musicCommands = createMusicCommands(executeMusicAction, musicFilter
 // Keep nested /music requests working while Discord clients refresh the command menu.
 export async function executeMusicAction(interaction: ChatInputCommandInteraction, subcommand: string) {
   if (subcommand === "play") {
-    await interaction.deferReply();
+    const ageMs = Date.now() - interaction.createdTimestamp;
+    if (ageMs >= 3_000) {
+      console.warn(`[music:expired-command] interaction=${interaction.id} age=${ageMs}ms`);
+      return;
+    }
+    const ackStartedAt = performance.now();
+    const acknowledged = interaction.deferReply().then(() => {
+      const ackMs = Math.round(performance.now() - ackStartedAt);
+      console.info(`[music:ack] interaction=${interaction.id} age=${ageMs}ms ack=${ackMs}ms`);
+    }).catch((error: unknown) => {
+      const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+      console.warn(`[music:ack-error] interaction=${interaction.id} code=${String(code ?? "unknown")}`);
+      throw new Error("Discord did not accept the playback acknowledgement.");
+    });
 
     try {
       const query = interaction.options.getString("query", true);
-      const { player, result, added, startsPlayback, spotifySummary, spotifyQueueWarmup } = await playQuery(interaction, query);
+      const [{ player, result, added, startsPlayback, spotifySummary, spotifyQueueWarmup }] = await Promise.all([
+        playQuery(interaction, query, acknowledged),
+        acknowledged
+      ]);
       if (startsPlayback) {
         if (spotifySummary && spotifySummary.total > 1) {
           const pending = spotifySummary.total - spotifySummary.resolved - spotifySummary.skipped;
@@ -85,6 +103,7 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
         components: musicControlRows(player)
       });
     } catch (error) {
+      if (!interaction.deferred && !interaction.replied) return;
       await interaction.editReply(error instanceof Error ? error.message : "Could not play that track.");
     }
 
@@ -140,6 +159,7 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
             musicAutoplayEnabled: autoplayDefault ?? current.musicAutoplayEnabled ?? false
           })
         : current;
+      cacheMusicGuildConfig(config);
 
       const player = getMusicPlayer(interaction.guildId!);
       if (player) {
@@ -187,10 +207,11 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
   try {
     await ensureMusicController(interaction, player);
 
-    if (subcommand === "pause") {
-      await player.pause();
-      await interaction.editReply({ content: "Paused." });
-      await refreshNowPlayingPanel(interaction.client, player);
+    if (subcommand === "pause" || subcommand === "resume") {
+      const paused = await setMusicPaused(player, subcommand === "pause", () =>
+        refreshNowPlayingPanel(interaction.client, player)
+      );
+      await interaction.editReply({ content: paused === undefined ? "The track changed." : paused ? "Paused." : "Resumed." });
       return;
     }
 
@@ -211,12 +232,6 @@ export async function executeMusicAction(interaction: ChatInputCommandInteractio
       return;
     }
 
-    if (subcommand === "resume") {
-      await player.resume();
-      await interaction.editReply({ content: "Resumed." });
-      await refreshNowPlayingPanel(interaction.client, player);
-      return;
-    }
 
     if (subcommand === "skip") {
       cancelMusicRecovery(player);
