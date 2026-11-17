@@ -59,12 +59,15 @@ test("cleanup previews tracked IDs, preserves untracked resources, and reports f
       ["222", {id: "222", name: "denied", delete: async () => { throw new Error("Forbidden"); }}],
       ["999", {id: "999", name: "General", delete: async () => { deleted.push("999"); }}]
     ]);
-    const roles = new Map([["333", {id: "333", name: "assigned", members: new Map([["user", {}]])}]]);
+    const roles = new Map([["333", {id: "333", name: "assigned", members: new Map()}]]);
     await store.updateGuildConfig("123", {welcomeChannelId: "111", logChannelId: "222", autoRoleId: "333"});
     let confirm = false;
     const replies = [];
     const interaction = {
-      guildId: "123", guild: {id: "123", channels: {fetch: async () => channels}, roles: {fetch: async () => roles}},
+      guildId: "123", guild: {
+        id: "123", channels: {fetch: async () => channels}, roles: {fetch: async () => roles},
+        members: {fetch: async () => { roles.get("333").members.set("user", {}); }}
+      },
       options: {getSubcommand: () => "cleanup", getString: () => "gaming", getBoolean: () => confirm},
       deferReply: async () => {}, editReply: async reply => { replies.push(reply); }
     };

@@ -966,6 +966,9 @@ async function cleanup(interaction: Parameters<Command["execute"]>[0]) {
   }
   const results: string[] = [];
   const removed = new Set<string>();
+  // Role.members only includes cached members. Populate the cache before
+  // deciding whether a builder-created role is safe to remove.
+  if (resources.some((item) => item.type === "role")) await guild.members.fetch();
   for (const type of ["channel", "category", "role"]) {
     for (const item of resources.filter((entry) => entry.type === type)) {
       const resource = item.resource;
