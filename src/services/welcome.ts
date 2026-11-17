@@ -1,6 +1,15 @@
+import { createHash } from "node:crypto";
 import { AttachmentBuilder, EmbedBuilder, type GuildMember, type MessageCreateOptions } from "discord.js";
 import { getActiveVisualTemplate } from "./visual-templates.js";
 import { renderBaddieverseWelcomeCard, renderWelcomeCard } from "./welcome-card.js";
+
+export function welcomeMessageNonce(member: Pick<GuildMember, "guild" | "id" | "joinedTimestamp">): string {
+  // Each delivery of the same join gets the same nonce, including across bot processes.
+  return createHash("sha256")
+    .update(`welcome:${member.guild.id}:${member.id}:${member.joinedTimestamp ?? "unknown"}`)
+    .digest("base64url")
+    .slice(0, 24);
+}
 
 export function renderWelcomeText(
   template: string | undefined,

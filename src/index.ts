@@ -20,7 +20,7 @@ import { handleMusicRaw, initMusic } from "./services/music.js";
 import { handleStarboardReaction } from "./services/starboard.js";
 import { getGuildConfig } from "./services/store.js";
 import { handleTempVoice } from "./services/temp-voice.js";
-import { buildWelcomeMessage } from "./services/welcome.js";
+import { buildWelcomeMessage, welcomeMessageNonce } from "./services/welcome.js";
 
 dns.setDefaultResultOrder("ipv4first");
 
@@ -129,6 +129,7 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
 
 client.on(Events.GuildMemberAdd, async (member) => {
   try {
+    const nonce = welcomeMessageNonce(member);
     const config = await getGuildConfig(member.guild.id);
 
     if (config.autoRoleId) {
@@ -140,9 +141,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
     const channel = await member.guild.channels.fetch(config.welcomeChannelId).catch(() => null);
     if (!channel?.isTextBased() || channel.isDMBased()) return;
 
-    await channel
-      .send(await buildWelcomeMessage(member, config.welcomeMessage, config.accentColor))
-      .catch(() => null);
+    await channel.send({
+      ...await buildWelcomeMessage(member, config.welcomeMessage, config.accentColor),
+      nonce,
+      enforceNonce: true
+    });
   } catch (error) {
     console.error("Guild member join handler failed:", error);
   }
