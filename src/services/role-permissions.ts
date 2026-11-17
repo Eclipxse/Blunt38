@@ -398,6 +398,9 @@ export async function roleEditProblem(guild: Guild, userId: string, role: Role) 
 
   const botMember = guild.members.me ?? await guild.members.fetchMe();
   const moderator = await guild.members.fetch(userId);
+  if (!moderator.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    return "You need Manage Roles to change this role.";
+  }
   const moderatorCanEdit = guild.ownerId === userId
     || role.position < moderator.roles.highest.position;
   const botCanEdit = botMember.permissions.has(PermissionFlagsBits.ManageRoles)

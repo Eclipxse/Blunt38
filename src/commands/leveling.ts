@@ -28,22 +28,23 @@ export const levelingCommand: Command = {
   async execute(interaction) {
     if (!interaction.guildId) return;
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const subcommand = interaction.options.getSubcommand();
     if (subcommand === "enable") {
       await updateGuildConfig(interaction.guildId, { levelingEnabled: true });
-      await interaction.reply({ content: "Leveling enabled.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "Leveling enabled." });
       return;
     }
 
     if (subcommand === "disable") {
       await updateGuildConfig(interaction.guildId, { levelingEnabled: false });
-      await interaction.reply({ content: "Leveling disabled.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "Leveling disabled." });
       return;
     }
 
     const channel = interaction.options.getChannel("channel", true);
     await updateGuildConfig(interaction.guildId, { levelUpChannelId: channel.id, levelingEnabled: true });
-    await interaction.reply({ content: `Level-up messages will go to ${channel}.`, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `Level-up messages will go to ${channel}.` });
   }
 };
 
@@ -109,12 +110,13 @@ export const leaderboardCommand: Command = {
   async execute(interaction) {
     if (!interaction.guildId) return;
 
+    await interaction.deferReply();
     const top = await listTopLevels(interaction.guildId, 10);
     const lines = top.map((record, index) => {
       return `**${index + 1}.** <@${record.userId}> - level **${record.level}**, ${record.xp} XP`;
     });
 
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [embed("Leaderboard", lines.length ? lines.join("\n") : "No XP yet.", palette.primary)]
     });
   }

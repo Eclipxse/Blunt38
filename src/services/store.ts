@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { randomInt, randomUUID } from "node:crypto";
+import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import path from "node:path";
 import type {
   Birthday,
@@ -68,13 +68,14 @@ type RolePanelRow = Omit<RolePanel, "guildId" | "roleIds" | "createdAt"> & {
   created_at: DbDate;
 };
 
-type GiveawayRow = Omit<Giveaway, "guildId" | "channelId" | "messageId" | "winnerCount" | "endsAt" | "entrantIds" | "createdAt"> & {
+type GiveawayRow = Omit<Giveaway, "guildId" | "channelId" | "messageId" | "winnerCount" | "endsAt" | "entrantIds" | "winnerIds" | "createdAt"> & {
   guild_id: string;
   channel_id: string;
   message_id: string | null;
   winner_count: number;
   ends_at: DbDate;
   entrant_ids: string[];
+  winner_ids?: string[] | null;
   created_at: DbDate;
 };
 
@@ -193,6 +194,7 @@ function toGiveaway(row: GiveawayRow): Giveaway {
     winnerCount: row.winner_count,
     endsAt: iso(row.ends_at) ?? new Date().toISOString(),
     entrantIds: row.entrant_ids,
+    winnerIds: row.winner_ids ?? undefined,
     ended: row.ended,
     createdAt: iso(row.created_at) ?? new Date().toISOString()
   };
@@ -252,13 +254,21 @@ async function readStore(): Promise<StoreShape> {
 
 async function writeStore(store: StoreShape) {
   await mkdir(dataDir, { recursive: true });
-  await writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  const temporaryPath = `${storePath}.${randomUUID()}.tmp`;
+  await writeFile(temporaryPath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  await rename(temporaryPath, storePath);
 }
 
-async function updateStore<T>(mutator: (store: StoreShape) => T | Promise<T>) {
-  const store = await readStore();
-  const result = await mutator(store);
-  await writeStore(store);
+let pendingStoreWrite: Promise<void> = Promise.resolve();
+
+function updateStore<T>(mutator: (store: StoreShape) => T | Promise<T>): Promise<T> {
+  const result = pendingStoreWrite.then(async () => {
+    const store = await readStore();
+    const value = await mutator(store);
+    await writeStore(store);
+    return value;
+  });
+  pendingStoreWrite = result.then(() => {}, () => {});
   return result;
 }
 
@@ -481,12 +491,9 @@ export async function createPoll(guildId: string, question: string, options: str
 
 export async function votePoll(pollId: string, userId: string, optionIndex: number) {
   if (postgresEnabled()) {
-    const poll = await getPoll(pollId);
-    if (!poll) return null;
-    poll.votes[userId] = optionIndex;
     const result = await query<PollRow>(
-      "update public.polls set votes = $2::jsonb where id = $1 returning *",
-      [pollId, JSON.stringify(poll.votes)]
+      "update public.polls set votes = votes || jsonb_build_object($2::text, $3::integer) where id = $1 returning *",
+      [pollId, userId, optionIndex]
     );
     return result.rows[0] ? toPoll(result.rows[0]) : null;
   }
@@ -589,34 +596,18 @@ export async function createGiveaway(input: Omit<Giveaway, "id" | "entrantIds" |
 
 export async function updateGiveaway(id: string, patch: Partial<Giveaway>) {
   if (postgresEnabled()) {
-    const current = await getGiveaway(id);
-    if (!current) return null;
-    const next = { ...current, ...patch, id };
+    const columns = {
+      guildId: "guild_id", channelId: "channel_id", messageId: "message_id",
+      prize: "prize", winnerCount: "winner_count", endsAt: "ends_at",
+      entrantIds: "entrant_ids", winnerIds: "winner_ids", ended: "ended", createdAt: "created_at"
+    } as const;
+    const keys = (Object.keys(columns) as Array<keyof typeof columns>)
+      .filter((key) => Object.hasOwn(patch, key));
+    if (!keys.length) return getGiveaway(id);
+    const assignments = keys.map((key, index) => `${columns[key]} = $${index + 2}`);
     const result = await query<GiveawayRow>(
-      `update public.giveaways set
-        guild_id = $2,
-        channel_id = $3,
-        message_id = $4,
-        prize = $5,
-        winner_count = $6,
-        ends_at = $7,
-        entrant_ids = $8,
-        ended = $9,
-        created_at = $10
-       where id = $1
-       returning *`,
-      [
-        id,
-        next.guildId,
-        next.channelId,
-        nullable(next.messageId),
-        next.prize,
-        next.winnerCount,
-        next.endsAt,
-        next.entrantIds,
-        next.ended,
-        next.createdAt
-      ]
+      `update public.giveaways set ${assignments.join(", ")} where id = $1 returning *`,
+      [id, ...keys.map((key) => nullable(patch[key]))]
     );
     return result.rows[0] ? toGiveaway(result.rows[0]) : null;
   }
@@ -641,6 +632,34 @@ export async function getGiveaway(id: string) {
   return store.giveaways[id] ?? null;
 }
 
+export async function claimGiveawayEnd(id: string, guildId: string) {
+  if (postgresEnabled()) {
+    const result = await query<GiveawayRow>(
+      `update public.giveaways set ended = true,
+       winner_ids = array(
+         select entrant from (select distinct unnest(entrant_ids) as entrant) entrants
+         order by random() limit winner_count
+       )
+       where id = $1 and guild_id = $2 and not ended returning *`,
+      [id, guildId]
+    );
+    return result.rows[0] ? toGiveaway(result.rows[0]) : null;
+  }
+
+  return updateStore((store) => {
+    const giveaway = store.giveaways[id];
+    if (!giveaway || giveaway.guildId !== guildId || giveaway.ended) return null;
+    const pool = [...new Set(giveaway.entrantIds)];
+    const winners: string[] = [];
+    while (pool.length && winners.length < giveaway.winnerCount) {
+      winners.push(pool.splice(randomInt(pool.length), 1)[0]!);
+    }
+    giveaway.winnerIds = winners;
+    giveaway.ended = true;
+    return giveaway;
+  });
+}
+
 export async function listActiveGiveaways() {
   if (postgresEnabled()) {
     const result = await query<GiveawayRow>("select * from public.giveaways where ended = false order by ends_at asc");
@@ -653,16 +672,13 @@ export async function listActiveGiveaways() {
 
 export async function enterGiveaway(id: string, userId: string) {
   if (postgresEnabled()) {
+    const result = await query<GiveawayRow>(
+      "update public.giveaways set entrant_ids = array_append(entrant_ids, $2) where id = $1 and not ended and not ($2 = any(entrant_ids)) returning *",
+      [id, userId]
+    );
+    if (result.rows[0]) return { giveaway: toGiveaway(result.rows[0]), entered: true };
     const giveaway = await getGiveaway(id);
-    if (!giveaway || giveaway.ended) return null;
-
-    const entered = giveaway.entrantIds.includes(userId);
-    if (!entered) {
-      giveaway.entrantIds.push(userId);
-      await updateGiveaway(id, { entrantIds: giveaway.entrantIds });
-    }
-
-    return { giveaway, entered: !entered };
+    return giveaway && !giveaway.ended ? { giveaway, entered: false } : null;
   }
 
   return updateStore((store) => {

@@ -74,9 +74,10 @@ export const pollCommand: Command = {
       .map((index) => interaction.options.getString(`option_${index}`))
       .filter((option): option is string => Boolean(option));
 
+    await interaction.deferReply();
     const poll = await createPoll(interaction.guildId, question, options);
 
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [pollEmbed(poll)],
       components: pollRows(poll)
     });

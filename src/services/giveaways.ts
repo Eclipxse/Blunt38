@@ -7,11 +7,11 @@ import {
   TextChannel
 } from "discord.js";
 import type { Giveaway } from "../types.js";
-import { getGiveaway, listActiveGiveaways, updateGiveaway } from "./store.js";
+import { claimGiveawayEnd, listActiveGiveaways } from "./store.js";
 import { palette, statusValue } from "../utils/ui.js";
 import { env } from "../env.js";
 
-export function giveawayEmbed(giveaway: Giveaway, winnerMentions: string[] = []) {
+export function giveawayEmbed(giveaway: Giveaway, winnerMentions: string[] = (giveaway.winnerIds ?? []).map((id) => `<@${id}>`)) {
   const ended = giveaway.ended || Date.parse(giveaway.endsAt) <= Date.now();
   const description = ended
     ? winnerMentions.length
@@ -45,26 +45,11 @@ export function giveawayRows(giveaway: Giveaway, disabled = false) {
   ];
 }
 
-function pickWinners(giveaway: Giveaway) {
-  const pool = [...new Set(giveaway.entrantIds)];
-  const winners: string[] = [];
-
-  while (pool.length && winners.length < giveaway.winnerCount) {
-    const index = Math.floor(Math.random() * pool.length);
-    const [winner] = pool.splice(index, 1);
-    if (winner) winners.push(winner);
-  }
-
-  return winners;
-}
-
-export async function endGiveaway(client: Client, id: string) {
-  const giveaway = await getGiveaway(id);
-  if (!giveaway || giveaway.ended) return false;
-
-  const winners = pickWinners(giveaway);
-  const ended = await updateGiveaway(id, { ended: true });
+export async function endGiveaway(client: Client, id: string, guildId: string) {
+  const ended = await claimGiveawayEnd(id, guildId);
   if (!ended) return false;
+  const giveaway = ended;
+  const winners = ended.winnerIds ?? [];
 
   const guild = await client.guilds.fetch(giveaway.guildId).catch(() => null);
   const channel = giveaway.channelId
@@ -92,7 +77,7 @@ export function startGiveawayScheduler(client: Client) {
     await Promise.all(
       active
         .filter((giveaway) => Date.parse(giveaway.endsAt) <= Date.now())
-        .map((giveaway) => endGiveaway(client, giveaway.id))
+        .map((giveaway) => endGiveaway(client, giveaway.id, giveaway.guildId))
     );
   };
 

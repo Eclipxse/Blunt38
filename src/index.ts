@@ -81,6 +81,9 @@ client.once(Events.ClientReady, async (readyClient) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  const started = performance.now();
+  const age = Date.now() - interaction.createdTimestamp;
+  const label = interaction.isChatInputCommand() ? interaction.commandName : "component";
   try {
     if (interaction.isChatInputCommand()) {
       const command = commandMap.get(interaction.commandName);
@@ -108,6 +111,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
     } else {
       await interaction.reply(payload).catch(() => null);
     }
+  } finally {
+    console.info(`[interaction:timing] command=${label} receivedAge=${age}ms elapsed=${Math.round(performance.now() - started)}ms acknowledged=${interaction.isRepliable() && (interaction.deferred || interaction.replied)}`);
   }
 });
 

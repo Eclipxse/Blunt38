@@ -4,14 +4,15 @@ import { giveawayEmbed, giveawayRows } from "../services/giveaways.js";
 
 export async function handleGiveawayButton(interaction: ButtonInteraction) {
   const id = interaction.customId.split(":")[2];
+  await interaction.deferUpdate();
   const result = await enterGiveaway(id, interaction.user.id);
 
   if (!result) {
-    await interaction.reply({ content: "This giveaway is no longer active.", flags: MessageFlags.Ephemeral });
+    await interaction.followUp({ content: "This giveaway is no longer active.", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.update({
+  await interaction.editReply({
     embeds: [giveawayEmbed(result.giveaway)],
     components: giveawayRows(result.giveaway)
   });

@@ -58,18 +58,16 @@ async function applyPreset(
 
   const editProblem = await roleEditProblem(interaction.guild, interaction.user.id, role);
   if (editProblem) {
-    await interaction.reply({
-      embeds: [warningEmbed("Role Factory Blocked", editProblem)],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Role Factory Blocked", editProblem)]
     });
     return;
   }
 
   const grantProblem = await permissionGrantProblem(interaction, preset.permissions);
   if (grantProblem) {
-    await interaction.reply({
-      embeds: [warningEmbed("Preset Blocked", grantProblem)],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Preset Blocked", grantProblem)]
     });
     return;
   }
@@ -80,7 +78,7 @@ async function applyPreset(
       `${preset.name} preset applied by ${interaction.user.tag}`
     );
 
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [
         panelEmbed(
           "Role Preset Applied",
@@ -97,19 +95,17 @@ async function applyPreset(
             inline: false
           }
         )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   } catch (error) {
     console.error("Role preset failed:", error);
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [
         warningEmbed(
           "Preset Failed",
           "Discord rejected the role update. Check Manage Roles and move blunt38 above the target role."
         )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 }
@@ -125,17 +121,15 @@ async function createRole(interaction: CommandInteraction) {
   const preset = presetKey && isRolePresetKey(presetKey) ? rolePresets[presetKey] : null;
 
   if (!name) {
-    await interaction.reply({
-      embeds: [warningEmbed("Invalid Role Name", "Give the role a visible name.")],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Invalid Role Name", "Give the role a visible name.")]
     });
     return;
   }
 
   if (color === null) {
-    await interaction.reply({
-      embeds: [warningEmbed("Invalid Color", "Use a six-digit hex color such as `#8f63c7`.")],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Invalid Color", "Use a six-digit hex color such as `#8f63c7`.")]
     });
     return;
   }
@@ -143,9 +137,8 @@ async function createRole(interaction: CommandInteraction) {
   if (preset) {
     const grantProblem = await permissionGrantProblem(interaction, preset.permissions);
     if (grantProblem) {
-      await interaction.reply({
-        embeds: [warningEmbed("Role Creation Blocked", grantProblem)],
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        embeds: [warningEmbed("Role Creation Blocked", grantProblem)]
       });
       return;
     }
@@ -167,14 +160,13 @@ async function createRole(interaction: CommandInteraction) {
         interaction.user.id,
         role
       );
-      await interaction.reply({
-        ...rolePermissionBuilderPayload(session),
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        ...rolePermissionBuilderPayload(session)
       });
       return;
     }
 
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [
         panelEmbed(
           "Role Created",
@@ -188,19 +180,17 @@ async function createRole(interaction: CommandInteraction) {
           { name: "Displayed Separately", value: hoist ? "`Yes`" : "`No`", inline: true },
           { name: "Mentionable", value: mentionable ? "`Yes`" : "`No`", inline: true }
         )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   } catch (error) {
     console.error("Role creation failed:", error);
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [
         warningEmbed(
           "Role Creation Failed",
           "Check Manage Roles, the role hierarchy, and the supplied role color."
         )
-      ],
-      flags: MessageFlags.Ephemeral
+      ]
     });
   }
 }
@@ -212,18 +202,16 @@ async function openPermissionBuilder(interaction: CommandInteraction) {
   const role = await interaction.guild.roles.fetch(selectedRole.id).catch(() => null);
 
   if (!role) {
-    await interaction.reply({
-      embeds: [warningEmbed("Role Missing", "I could not load that role.")],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Role Missing", "I could not load that role.")]
     });
     return;
   }
 
   const problem = await roleEditProblem(interaction.guild, interaction.user.id, role);
   if (problem) {
-    await interaction.reply({
-      embeds: [warningEmbed("Role Factory Blocked", problem)],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [warningEmbed("Role Factory Blocked", problem)]
     });
     return;
   }
@@ -233,9 +221,8 @@ async function openPermissionBuilder(interaction: CommandInteraction) {
     interaction.user.id,
     role
   );
-  await interaction.reply({
-    ...rolePermissionBuilderPayload(session),
-    flags: MessageFlags.Ephemeral
+  await interaction.editReply({
+    ...rolePermissionBuilderPayload(session)
   });
 }
 
@@ -347,6 +334,7 @@ export const roleCommand: Command = {
   async execute(interaction) {
     if (!interaction.guildId || !interaction.guild) return;
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const subcommand = interaction.options.getSubcommand();
 
     if (subcommand === "create") {
@@ -366,9 +354,8 @@ export const roleCommand: Command = {
       const role = await interaction.guild.roles.fetch(selectedRole.id).catch(() => null);
 
       if (!preset || !role) {
-        await interaction.reply({
-          embeds: [warningEmbed("Preset Failed", "I could not load that role or permission preset.")],
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          embeds: [warningEmbed("Preset Failed", "I could not load that role or permission preset.")]
         });
         return;
       }
@@ -378,20 +365,26 @@ export const roleCommand: Command = {
     }
 
     if (subcommand === "autorole") {
-      const role = interaction.options.getRole("role", true);
+      const selectedRole = interaction.options.getRole("role", true);
+      const role = await interaction.guild.roles.fetch(selectedRole.id);
+      if (!role) throw new Error("The selected role no longer exists.");
+      const editProblem = await roleEditProblem(interaction.guild, interaction.user.id, role);
+      if (editProblem) {
+        await interaction.editReply({ content: editProblem });
+        return;
+      }
+
       await updateGuildConfig(interaction.guildId, { autoRoleId: role.id });
-      await interaction.reply({
-        content: `Autorole set to ${role}.`,
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: `Autorole set to ${role}.`
       });
       return;
     }
 
     if (subcommand === "clear-autorole") {
       await updateGuildConfig(interaction.guildId, { autoRoleId: undefined });
-      await interaction.reply({
-        content: "Autorole disabled.",
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: "Autorole disabled."
       });
       return;
     }
@@ -402,32 +395,34 @@ export const roleCommand: Command = {
     const role = await interaction.guild.roles.fetch(selectedRole.id).catch(() => null);
 
     if (!member || !role) {
-      await interaction.reply({
-        content: "I could not find that member or role.",
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: "I could not find that member or role."
       });
+      return;
+    }
+
+    const editProblem = await roleEditProblem(interaction.guild, interaction.user.id, role);
+    if (editProblem) {
+      await interaction.editReply({ content: editProblem });
       return;
     }
 
     try {
       if (subcommand === "give") {
         await member.roles.add(role.id, `Role command by ${interaction.user.tag}`);
-        await interaction.reply({
-          content: `Gave ${role} to ${member}.`,
-          flags: MessageFlags.Ephemeral
+        await interaction.editReply({
+          content: `Gave ${role} to ${member}.`
         });
         return;
       }
 
       await member.roles.remove(role.id, `Role command by ${interaction.user.tag}`);
-      await interaction.reply({
-        content: `Removed ${role} from ${member}.`,
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: `Removed ${role} from ${member}.`
       });
     } catch {
-      await interaction.reply({
-        content: "Role update failed. Put my bot role above the target role and check Manage Roles.",
-        flags: MessageFlags.Ephemeral
+      await interaction.editReply({
+        content: "Role update failed. Put my bot role above the target role and check Manage Roles."
       });
     }
   }

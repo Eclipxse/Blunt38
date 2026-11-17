@@ -1,3 +1,4 @@
+import { appendFile, mkdir, readFile } from "node:fs/promises";
 import {
   ActionRowBuilder,
   ButtonBuilder,
@@ -15,7 +16,7 @@ import {
   type TextChannel,
   type VoiceChannel
 } from "discord.js";
-import { createRolePanel, updateGuildConfig } from "../services/store.js";
+import { createRolePanel, getGuildConfig, updateGuildConfig } from "../services/store.js";
 import type { Command } from "../types.js";
 import { embed, palette, panelEmbed } from "../utils/ui.js";
 
@@ -600,6 +601,15 @@ async function assertBotPermissions(member: GuildMember) {
   }
 }
 
+function buildManifestPath(guildId: string, theme: ThemeKey) {
+  return `data/server-builder/${guildId}-${theme}.log`;
+}
+
+async function recordBuildResource(guildId: string, theme: ThemeKey, type: "channel" | "category" | "role", id: string) {
+  await mkdir("data/server-builder", { recursive: true });
+  await appendFile(buildManifestPath(guildId, theme), `${type} ${id}\n`);
+}
+
 async function ensureRoles(guild: Guild, template: ServerTemplate) {
   await guild.roles.fetch();
   const roles = new Map<RoleKey, Role>();
@@ -617,6 +627,7 @@ async function ensureRoles(guild: Guild, template: ServerTemplate) {
       permissions: spec.permissions ?? [],
       reason: `${template.name} server builder`
     });
+    await recordBuildResource(guild.id, template.key, "role", created.id);
     roles.set(spec.key, created);
   }
 
@@ -627,12 +638,14 @@ async function ensureCategory(guild: Guild, template: ServerTemplate, spec: Cate
   const existing = findCategory(guild, spec.name);
   if (existing) return existing;
 
-  return guild.channels.create({
+  const category = await guild.channels.create({
     name: spec.name,
     type: ChannelType.GuildCategory,
     permissionOverwrites: categoryOverwrites(guild, spec, roles),
     reason: `${template.name} server builder`
   });
+  await recordBuildResource(guild.id, template.key, "category", category.id);
+  return category;
 }
 
 async function ensureChannel(guild: Guild, template: ServerTemplate, category: CategoryChannel, spec: ChannelSpec, roles: Map<RoleKey, Role>) {
@@ -651,6 +664,7 @@ async function ensureChannel(guild: Guild, template: ServerTemplate, category: C
     reason: `${template.name} server builder`
   });
 
+  await recordBuildResource(guild.id, template.key, "channel", channel.id);
   return { channel, created: true };
 }
 
@@ -669,6 +683,7 @@ async function ensureRootChannel(guild: Guild, template: ServerTemplate, spec: C
     reason: `${template.name} server builder`
   });
 
+  await recordBuildResource(guild.id, template.key, "channel", channel.id);
   return { channel, created: true };
 }
 
@@ -922,92 +937,62 @@ async function build(interaction: Parameters<Command["execute"]>[0]) {
 
 async function cleanup(interaction: Parameters<Command["execute"]>[0]) {
   if (!interaction.guild || !interaction.guildId) return;
-
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  const template = makeTemplate(getTheme(interaction.options.getString("theme")));
-  const deletedChannels: string[] = [];
-  const deletedRoles: string[] = [];
-  const skippedRoles: string[] = [];
-
-  await interaction.guild.channels.fetch();
-  await interaction.guild.roles.fetch();
-
-  for (const channelSpec of template.rootChannels ?? []) {
-    const channel = findRootChannel(interaction.guild, channelSpec);
-    if (!channel) continue;
-
-    const isMarkedText =
-      (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) &&
-      Boolean(channel.topic?.includes(buildMarker));
-    const isTemplateVoice = channel.type === ChannelType.GuildVoice;
-    if (!isMarkedText && !isTemplateVoice) continue;
-
-    await channel.delete(`${template.name} server cleanup`).catch(() => null);
-    deletedChannels.push(channel.name);
-  }
-
-  for (const categorySpec of [...template.categories].reverse()) {
-    const category = findCategory(interaction.guild, categorySpec.name);
-    if (!category) continue;
-
-    for (const channelSpec of categorySpec.channels) {
-      const channel = findChildChannel(category, channelSpec);
-      if (!channel) continue;
-
-      const isMarkedText =
-        (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) &&
-        Boolean(channel.topic?.includes(buildMarker));
-      const isTemplateVoice = channel.type === ChannelType.GuildVoice;
-      if (!isMarkedText && !isTemplateVoice) continue;
-
-      await channel.delete(`${template.name} server cleanup`).catch(() => null);
-      deletedChannels.push(channel.name);
-    }
-
-    if (!category.children.cache.size) {
-      await category.delete(`${template.name} server cleanup`).catch(() => null);
-      deletedChannels.push(category.name);
-    }
-  }
-
-  for (const roleSpec of [...template.roles].reverse()) {
-    const role = findRole(interaction.guild, roleSpec.name);
-    if (!role) continue;
-
-    if (role.members.size > 0) {
-      skippedRoles.push(role.name);
-      continue;
-    }
-
-    await role.delete(`${template.name} server cleanup`).catch(() => null);
-    deletedRoles.push(role.name);
-  }
-
-  await updateGuildConfig(interaction.guildId, {
-    welcomeChannelId: undefined,
-    logChannelId: undefined,
-    ticketCategoryId: undefined,
-    supportRoleId: undefined,
-    verifiedRoleId: undefined,
-    autoRoleId: undefined,
-    tempVoiceJoinChannelId: undefined,
-    tempVoiceCategoryId: undefined,
-    birthdayChannelId: undefined,
-    levelingEnabled: false,
-    levelUpChannelId: undefined,
-    aiResponderEnabled: false,
-    aiResponderChannelId: undefined,
-    musicDjRoleId: undefined
+  const guild = interaction.guild;
+  const theme = getTheme(interaction.options.getString("theme"));
+  const manifest = await readFile(buildManifestPath(guild.id, theme), "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return "";
+    throw error;
   });
-
+  const [channels, roles] = await Promise.all([guild.channels.fetch(), guild.roles.fetch()]);
+  const resources = [...new Set(manifest.trim().split("\n"))].flatMap((entry) => {
+    const match = /^(channel|role|category) (\d+)$/.exec(entry);
+    if (!match) return [];
+    const [, type, id] = match;
+    const resource = type === "role" ? roles.get(id!) : channels.get(id!);
+    return resource ? [{ type, resource }] : [];
+  });
+  if (!resources.length) {
+    await interaction.editReply("No tracked builder resources remain for this theme.");
+    return;
+  }
+  if (!interaction.options.getBoolean("confirm")) {
+    const list = resources.map(({ type, resource }) => `${type}: ${resource.name} (${resource.id})`).join("\n");
+    await interaction.editReply({
+      content: "Cleanup preview. Run again with confirm enabled to remove these tracked resources. Assigned roles and nonempty categories are skipped.",
+      files: [{ attachment: Buffer.from(list), name: "cleanup-preview.txt" }]
+    });
+    return;
+  }
+  const results: string[] = [];
+  const removed = new Set<string>();
+  for (const type of ["channel", "category", "role"]) {
+    for (const item of resources.filter((entry) => entry.type === type)) {
+      const resource = item.resource;
+      if (("members" in resource && type === "role" && resource.members.size > 0)
+        || ("children" in resource && resource.children.cache.size > 0)) {
+        results.push(`Skipped ${resource.name} (${resource.id})`);
+        continue;
+      }
+      try {
+        await resource.delete("Server builder cleanup");
+        removed.add(resource.id);
+        results.push(`Deleted ${resource.name} (${resource.id})`);
+      } catch {
+        results.push(`Failed to delete ${resource.name} (${resource.id})`);
+      }
+    }
+  }
+  const config = await getGuildConfig(guild.id);
+  const references = ["welcomeChannelId", "logChannelId", "ticketCategoryId", "supportRoleId", "verifiedRoleId", "autoRoleId", "tempVoiceJoinChannelId", "tempVoiceCategoryId", "birthdayChannelId", "levelUpChannelId", "aiResponderChannelId", "musicDjRoleId"] as const;
+  const patch = Object.fromEntries(references.filter((key) => {
+    const value = config[key];
+    return value && removed.has(value);
+  }).map((key) => [key, undefined]));
+  if (Object.keys(patch).length) await updateGuildConfig(guild.id, patch);
   await interaction.editReply({
-    embeds: [
-      embed("Server Cleanup Complete", "Removed marked builder channels and unused builder roles.", palette.warning).addFields(
-        { name: "Deleted Channels/Categories", value: deletedChannels.length ? deletedChannels.map((name) => `\`${name}\``).join(" ") : "`none`", inline: false },
-        { name: "Deleted Empty Roles", value: deletedRoles.length ? deletedRoles.map((name) => `\`${name}\``).join(" ") : "`none`", inline: false },
-        { name: "Skipped Roles With Members", value: skippedRoles.length ? skippedRoles.map((name) => `\`${name}\``).join(" ") : "`none`", inline: false }
-      )
-    ]
+    content: "Cleanup finished. See the result for each tracked resource.",
+    files: [{ attachment: Buffer.from(results.join("\n")), name: "cleanup-results.txt" }]
   });
 }
 
@@ -1049,6 +1034,7 @@ export const serverBuilderCommand: Command = {
             .setDescription("Premium server theme.")
             .addChoices(...themeChoices)
         )
+        .addBooleanOption((option) => option.setName("confirm").setDescription("Apply cleanup after reviewing the preview."))
     ),
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();

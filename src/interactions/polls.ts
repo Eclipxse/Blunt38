@@ -11,13 +11,14 @@ export async function handlePollButton(interaction: ButtonInteraction) {
     return;
   }
 
+  await interaction.deferUpdate();
   const poll = await votePoll(pollId, interaction.user.id, optionIndex);
   if (!poll) {
-    await interaction.reply({ content: "This poll no longer exists.", flags: MessageFlags.Ephemeral });
+    await interaction.followUp({ content: "This poll no longer exists.", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  await interaction.update({
+  await interaction.editReply({
     embeds: [pollEmbed(poll)],
     components: pollRows(poll)
   });

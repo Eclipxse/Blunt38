@@ -57,26 +57,26 @@ export const giveawayCommand: Command = {
     if (!interaction.guildId || !interaction.guild) return;
     const subcommand = interaction.options.getSubcommand();
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (subcommand === "end") {
       const id = interaction.options.getString("id", true);
-      const ended = await endGiveaway(interaction.client, id);
-      await interaction.reply({
-        content: ended ? "Giveaway ended." : "Could not find or end that giveaway.",
-        flags: MessageFlags.Ephemeral
+      const ended = await endGiveaway(interaction.client, id, interaction.guildId);
+      await interaction.editReply({
+        content: ended ? "Giveaway ended." : "Could not find or end that giveaway."
       });
       return;
     }
 
     const duration = parseDuration(interaction.options.getString("duration", true));
     if (!duration) {
-      await interaction.reply({ content: "Use a valid duration like 10m, 1h, or 1d.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "Use a valid duration like 10m, 1h, or 1d." });
       return;
     }
 
     const selected = interaction.options.getChannel("channel");
     const target = selected ? await interaction.guild.channels.fetch(selected.id) : interaction.channel;
     if (!target || target.type !== ChannelType.GuildText) {
-      await interaction.reply({ content: "Pick a normal text channel.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: "Pick a normal text channel." });
       return;
     }
 
@@ -94,6 +94,6 @@ export const giveawayCommand: Command = {
     });
 
     await updateGiveaway(giveaway.id, { messageId: message.id });
-    await interaction.reply({ content: `Giveaway started in ${target}. ID: \`${giveaway.id}\``, flags: MessageFlags.Ephemeral });
+    await interaction.editReply({ content: `Giveaway started in ${target}. ID: \`${giveaway.id}\`` });
   }
 };

@@ -76,6 +76,7 @@ export type Giveaway = {
   winnerCount: number;
   endsAt: string;
   entrantIds: string[];
+  winnerIds?: string[];
   ended: boolean;
   createdAt: string;
 };

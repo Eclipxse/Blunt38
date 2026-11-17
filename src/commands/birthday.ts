@@ -42,15 +42,16 @@ export const birthdayCommand: Command = {
     if (!interaction.guildId) return;
     const subcommand = interaction.options.getSubcommand();
 
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     if (subcommand === "channel") {
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-        await interaction.reply({ content: "You need Manage Server to set the birthday channel.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "You need Manage Server to set the birthday channel." });
         return;
       }
 
       const channel = interaction.options.getChannel("channel", true);
       await updateGuildConfig(interaction.guildId, { birthdayChannelId: channel.id });
-      await interaction.reply({ content: `Birthday announcements will go to ${channel}.`, flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: `Birthday announcements will go to ${channel}.` });
       return;
     }
 
@@ -58,18 +59,18 @@ export const birthdayCommand: Command = {
       const month = interaction.options.getInteger("month", true);
       const day = interaction.options.getInteger("day", true);
       if (!validDate(month, day)) {
-        await interaction.reply({ content: "That is not a valid calendar date.", flags: MessageFlags.Ephemeral });
+        await interaction.editReply({ content: "That is not a valid calendar date." });
         return;
       }
 
       await setBirthday(interaction.guildId, interaction.user.id, month, day);
-      await interaction.reply({ content: `Birthday saved as ${month}/${day}.`, flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: `Birthday saved as ${month}/${day}.` });
       return;
     }
 
     if (subcommand === "remove") {
       const removed = await removeBirthday(interaction.guildId, interaction.user.id);
-      await interaction.reply({ content: removed ? "Birthday removed." : "You did not have a birthday saved.", flags: MessageFlags.Ephemeral });
+      await interaction.editReply({ content: removed ? "Birthday removed." : "You did not have a birthday saved." });
       return;
     }
 
@@ -79,9 +80,8 @@ export const birthdayCommand: Command = {
       .slice(0, 25)
       .map((birthday) => `<@${birthday.userId}> - ${birthday.month}/${birthday.day}`);
 
-    await interaction.reply({
-      embeds: [embed("Birthdays", lines.length ? lines.join("\n") : "No birthdays saved yet.", palette.primary)],
-      flags: MessageFlags.Ephemeral
+    await interaction.editReply({
+      embeds: [embed("Birthdays", lines.length ? lines.join("\n") : "No birthdays saved yet.", palette.primary)]
     });
   }
 };
